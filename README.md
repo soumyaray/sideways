@@ -35,6 +35,14 @@ Resulting directory structure:
 
 ## Installation
 
+### Quick install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/soumyaray/sideways/main/install.sh | bash
+```
+
+This clones to `~/.sideways` and adds it to your shell config. Restart your shell or run `source ~/.zshrc`.
+
 ### Homebrew (macOS)
 
 ```bash
@@ -42,15 +50,13 @@ brew tap soumyaray/sideways
 brew install sideways
 ```
 
-Then follow the caveats to add the source line to your shell config.
-
-### Quick install
+Then add this line to your `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/soumyaray/sideways/main/install.sh | bash
+source "/opt/homebrew/opt/sideways/libexec/worktrees.sh"
 ```
 
-This clones to `~/.sideways` and adds it to your shell config. Restart your shell or run `source ~/.zshrc`.
+Restart your shell or run `source ~/.zshrc`.
 
 ### Manual install
 
