@@ -47,23 +47,23 @@ sw() {
                 return 1
             fi
 
-            local path="$worktrees_dir_rel/$branch"
+            local wt_path="$worktrees_dir_rel/$branch"
             if git show-ref --verify --quiet "refs/heads/$branch"; then
                 # Branch exists, use it
-                if ! git worktree add "$path" "$branch"; then
+                if ! git worktree add "$wt_path" "$branch"; then
                     return 1
                 fi
-                echo "Created: $path (existing branch $branch)"
+                echo "Created: $wt_path (existing branch $branch)"
             else
                 # Create new branch
-                if ! git worktree add "$path" -b "$branch"; then
+                if ! git worktree add "$wt_path" -b "$branch"; then
                     return 1
                 fi
-                echo "Created: $path (new branch $branch)"
+                echo "Created: $wt_path (new branch $branch)"
             fi
 
             if $switch; then
-                cd "$path"
+                cd "$wt_path"
             fi
             ;;
 
@@ -72,9 +72,9 @@ sw() {
             if [[ -n "$branch" ]]; then
                 cd "$worktrees_dir_abs/$branch"
             elif command -v fzf &>/dev/null; then
-                local path
-                path=$(git worktree list | fzf | awk '{print $1}')
-                [[ -n "$path" ]] && cd "$path"
+                local selected
+                selected=$(git worktree list | fzf | awk '{print $1}')
+                [[ -n "$selected" ]] && cd "$selected"
             else
                 echo "Interactive mode requires fzf. Install it with:" >&2
                 echo "  brew install fzf    # macOS" >&2
@@ -108,20 +108,20 @@ sw() {
                 return 1
             fi
 
-            local path="$worktrees_dir_rel/$branch"
-            local abs_path="$worktrees_dir_abs/$branch"
+            local wt_path="$worktrees_dir_rel/$branch"
+            local wt_abs_path="$worktrees_dir_abs/$branch"
 
             # Guard: check for uncommitted changes
-            if [[ -n "$(git -C "$abs_path" status --porcelain 2>/dev/null)" ]]; then
+            if [[ -n "$(git -C "$wt_abs_path" status --porcelain 2>/dev/null)" ]]; then
                 echo "sw: worktree '$branch' has uncommitted changes" >&2
                 echo "Commit or stash changes before removing" >&2
                 return 1
             fi
 
-            if ! git worktree remove "$path"; then
+            if ! git worktree remove "$wt_path"; then
                 return 1
             fi
-            echo "Removed worktree: $path"
+            echo "Removed worktree: $wt_path"
 
             if [[ -n "$delete_flag" ]]; then
                 if git branch "$delete_flag" "$branch" 2>/dev/null; then

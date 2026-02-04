@@ -49,7 +49,7 @@
 
 ### Testing
 
-41 tests using bats-core:
+**Unit tests** (41 tests using bats-core):
 
 ```bash
 brew install bats-core  # if needed
@@ -57,6 +57,14 @@ bats tests/worktrees.bats
 ```
 
 Tests cover: add, cd, rm, list, prune, base, info, rebase, done, help, and error cases.
+
+**Zsh integration tests** (catches zsh-specific issues like `$path` shadowing):
+
+```bash
+zsh tests/zsh-integration.zsh
+```
+
+These tests run in actual zsh and catch issues that bash-based bats tests miss.
 
 ### Key Files
 
