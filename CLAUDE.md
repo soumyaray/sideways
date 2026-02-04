@@ -45,10 +45,11 @@
 - Error handling: git errors are propagated (sw add/rm fail properly)
 - Terminology: "base" = main working directory, "worktree" = created via `sw add`
 - Guards: `sw add` and `sw rm` blocked from worktree subdirectories (must run from base)
+- Safety: `sw rm` and `sw done` refuse to remove worktrees with uncommitted changes
 
 ### Testing
 
-39 tests using bats-core:
+41 tests using bats-core:
 
 ```bash
 brew install bats-core  # if needed

@@ -31,7 +31,7 @@ Resulting directory structure:
 
 - **Zero dependencies** — pure shell (~230 lines), optional fzf for interactive selection
 - **Workflow commands** — `sw rebase <branch>` (sync with any branch), `sw done` (cleanup and return to base)
-- **Safety guards** — blocks `add`/`rm` from worktree subdirectories to prevent mistakes
+- **Safety guards** — blocks `rm`/`done` if uncommitted changes exist, blocks `add`/`rm` from wrong directory
 
 ## Installation
 
