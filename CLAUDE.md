@@ -118,13 +118,4 @@ Automates the full release process: tagging, pushing, and updating the Homebrew 
 
 ## Future Ideas
 
-### Nice-to-have commands
-
-- `sw diff` - Show diff against main branch
-- `sw push` - Push current branch (`git push -u origin HEAD`)
-- `sw open` - Open current worktree in IDE/editor
-
-### Other ideas
-
-- Claude command for interactive workflows (issue #, branch naming conventions)
-- Bulk cleanup command
+See [ROADMAP.md](ROADMAP.md) for future features, refactoring opportunities, and architectural decisions.
