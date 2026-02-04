@@ -10,24 +10,24 @@ sw() {
     shift 2>/dev/null
 
     # Compute project-specific worktrees directory
-    local repo_root main_wt proj_name wt_base wt_dir
+    local repo_root base_dir proj_name worktrees_dir_rel worktrees_dir_abs
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
         echo "sw: not in a git repository" >&2
         return 1
     }
 
     # Get base directory (first worktree is always the main one)
-    main_wt=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
+    base_dir=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
 
     # Compute paths relative to base (works from anywhere)
-    proj_name=$(basename "$main_wt")
-    wt_base="../${proj_name}-worktrees"                              # relative (for add/rm from base)
-    wt_dir="$(dirname "$main_wt")/${proj_name}-worktrees"            # absolute (for cd from anywhere)
+    proj_name=$(basename "$base_dir")
+    worktrees_dir_rel="../${proj_name}-worktrees"                    # relative (for add/rm from base)
+    worktrees_dir_abs="$(dirname "$base_dir")/${proj_name}-worktrees" # absolute (for cd from anywhere)
 
     case "$cmd" in
         add)
             # Guard: must be in base directory
-            if [[ "$repo_root" != "$main_wt" ]]; then
+            if [[ "$repo_root" != "$base_dir" ]]; then
                 echo "sw: add must be run from base directory" >&2
                 echo "Run 'sw base' first, then 'sw add $*'" >&2
                 return 1
@@ -47,7 +47,7 @@ sw() {
                 return 1
             fi
 
-            local path="$wt_base/$branch"
+            local path="$worktrees_dir_rel/$branch"
             if git show-ref --verify --quiet "refs/heads/$branch"; then
                 # Branch exists, use it
                 if ! git worktree add "$path" "$branch"; then
@@ -70,7 +70,7 @@ sw() {
         cd)
             local branch="$1"
             if [[ -n "$branch" ]]; then
-                cd "$wt_dir/$branch"
+                cd "$worktrees_dir_abs/$branch"
             elif command -v fzf &>/dev/null; then
                 local path
                 path=$(git worktree list | fzf | awk '{print $1}')
@@ -87,7 +87,7 @@ sw() {
 
         rm)
             # Guard: must be in base directory
-            if [[ "$repo_root" != "$main_wt" ]]; then
+            if [[ "$repo_root" != "$base_dir" ]]; then
                 echo "sw: rm must be run from base directory" >&2
                 echo "Run 'sw base' first, then 'sw rm $*'" >&2
                 return 1
@@ -108,7 +108,7 @@ sw() {
                 return 1
             fi
 
-            local path="$wt_base/$branch"
+            local path="$worktrees_dir_rel/$branch"
             if ! git worktree remove "$path"; then
                 return 1
             fi
@@ -134,20 +134,20 @@ sw() {
 
         base)
             # Jump back to base
-            if [[ "$repo_root" == "$main_wt" ]]; then
-                echo "Already in base directory: $main_wt"
+            if [[ "$repo_root" == "$base_dir" ]]; then
+                echo "Already in base directory: $base_dir"
                 return 0
             fi
-            cd "$main_wt"
+            cd "$base_dir"
             ;;
 
         info)
-            local current_path current_branch main_wt location
+            local current_path current_branch base_dir location
             current_path=$(git rev-parse --show-toplevel)
             current_branch=$(git branch --show-current)
-            main_wt=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
+            base_dir=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
 
-            if [[ "$current_path" == "$main_wt" ]]; then
+            if [[ "$current_path" == "$base_dir" ]]; then
                 location="base"
             else
                 location="worktree"
@@ -177,22 +177,22 @@ sw() {
 
         done)
             # Remove current worktree (keep branch), cd to base
-            local current_path main_wt
+            local current_path base_dir
             current_path=$(git rev-parse --show-toplevel)
-            main_wt=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
+            base_dir=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
 
-            if [[ "$current_path" == "$main_wt" ]]; then
+            if [[ "$current_path" == "$base_dir" ]]; then
                 echo "sw: not in a worktree (already in base directory)" >&2
                 return 1
             fi
 
             # Move to base first, then remove worktree
-            cd "$main_wt" || return 1
+            cd "$base_dir" || return 1
             if ! git worktree remove "$current_path"; then
                 return 1
             fi
             echo "Removed worktree: $current_path"
-            echo "Branch preserved. Now in base directory: $main_wt"
+            echo "Branch preserved. Now in base directory: $base_dir"
             ;;
 
         help|-h|--help|"")
