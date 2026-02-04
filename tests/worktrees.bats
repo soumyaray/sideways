@@ -528,3 +528,401 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"uncommitted changes"* ]]
 }
+
+# ============================================================================
+# sw add: gitignored file copying
+# ============================================================================
+
+@test "sw add: no .swcopy means nothing copied" {
+    # Create gitignore and gitignored files but no .swcopy
+    echo ".env" >> .gitignore
+    echo "SECRET=abc123" > .env
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    run sw add feature-nocopy
+
+    [ "$status" -eq 0 ]
+    # File should NOT be copied (no .swcopy)
+    [ ! -f "$WT_DIR/feature-nocopy/.env" ]
+}
+
+@test "sw add: copies files listed in .swcopy" {
+    # Create gitignore and gitignored files
+    echo ".env" >> .gitignore
+    echo "SECRET=abc123" > .env
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy to include .env
+    echo ".env" > .swcopy
+
+    run sw add feature-copy
+
+    [ "$status" -eq 0 ]
+    # Verify the gitignored file was copied
+    [ -f "$WT_DIR/feature-copy/.env" ]
+    [[ "$(cat "$WT_DIR/feature-copy/.env")" == "SECRET=abc123" ]]
+}
+
+@test "sw add: copies multiple files from .swcopy" {
+    # Create gitignore with multiple patterns
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+.envrc
+EOF
+    echo "SECRET=abc" > .env
+    echo "local instructions" > CLAUDE.local.md
+    echo "layout ruby" > .envrc
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy with multiple patterns
+    cat > .swcopy <<'EOF'
+.env
+CLAUDE.local.md
+.envrc
+EOF
+
+    run sw add feature-multi
+
+    [ "$status" -eq 0 ]
+    [ -f "$WT_DIR/feature-multi/.env" ]
+    [ -f "$WT_DIR/feature-multi/CLAUDE.local.md" ]
+    [ -f "$WT_DIR/feature-multi/.envrc" ]
+}
+
+@test "sw add: .swcopy copies directories" {
+    # Create gitignore for a directory
+    echo "logs/" >> .gitignore
+    mkdir -p logs
+    echo "log1" > logs/app.log
+    echo "log2" > logs/error.log
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy to include logs
+    echo "logs/" > .swcopy
+
+    run sw add feature-dir
+
+    [ "$status" -eq 0 ]
+    [ -d "$WT_DIR/feature-dir/logs" ]
+    [ -f "$WT_DIR/feature-dir/logs/app.log" ]
+    [ -f "$WT_DIR/feature-dir/logs/error.log" ]
+}
+
+@test "sw add: .swcopy only copies matching patterns" {
+    # Create gitignore
+    cat > .gitignore <<'EOF'
+.env
+node_modules/
+EOF
+    echo "SECRET=abc" > .env
+    mkdir -p node_modules/pkg
+    echo "package" > node_modules/pkg/index.js
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy to only include .env (not node_modules)
+    echo ".env" > .swcopy
+
+    run sw add feature-selective
+
+    [ "$status" -eq 0 ]
+    # .env should be copied (in .swcopy)
+    [ -f "$WT_DIR/feature-selective/.env" ]
+    # node_modules should NOT be copied (not in .swcopy)
+    [ ! -d "$WT_DIR/feature-selective/node_modules" ]
+}
+
+@test "sw add: .swcopy supports glob patterns" {
+    # Create gitignore
+    cat > .gitignore <<'EOF'
+.env
+debug.log
+app.log
+EOF
+    echo "SECRET=abc" > .env
+    echo "debug info" > debug.log
+    echo "app info" > app.log
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy to include all log files
+    echo "*.log" > .swcopy
+
+    run sw add feature-glob
+
+    [ "$status" -eq 0 ]
+    # .env should NOT be copied (not in .swcopy)
+    [ ! -f "$WT_DIR/feature-glob/.env" ]
+    # log files should be copied
+    [ -f "$WT_DIR/feature-glob/debug.log" ]
+    [ -f "$WT_DIR/feature-glob/app.log" ]
+}
+
+@test "sw add: .swcopy comments and blank lines ignored" {
+    # Create gitignore
+    cat > .gitignore <<'EOF'
+.env
+build/
+EOF
+    echo "SECRET=abc" > .env
+    mkdir -p build
+    echo "output" > build/app.js
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy with comments and blank lines
+    cat > .swcopy <<'EOF'
+# This is a comment
+.env
+
+# Another comment
+EOF
+
+    run sw add feature-comments
+
+    [ "$status" -eq 0 ]
+    # .env should be copied
+    [ -f "$WT_DIR/feature-comments/.env" ]
+    # build should NOT be copied (not in .swcopy)
+    [ ! -d "$WT_DIR/feature-comments/build" ]
+}
+
+@test "sw add: outputs list of copied items" {
+    # Create gitignore and files
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    echo "SECRET=abc" > .env
+    echo "local" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy
+    cat > .swcopy <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+
+    run sw add feature-output
+
+    [ "$status" -eq 0 ]
+    # Should list copied files in output
+    [[ "$output" == *"Copied:"* ]]
+    [[ "$output" == *".env"* ]]
+    [[ "$output" == *"CLAUDE.local.md"* ]]
+}
+
+@test "sw add: no output when nothing to copy" {
+    # No .swcopy file
+    run sw add feature-nothing
+
+    [ "$status" -eq 0 ]
+    # Should not mention copying
+    [[ "$output" != *"Copied:"* ]]
+}
+
+@test "sw add -s: copies files before switching" {
+    # Create gitignore and file
+    echo ".env" >> .gitignore
+    echo "SECRET=abc" > .env
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy
+    echo ".env" > .swcopy
+
+    sw add -s feature-switch-copy
+
+    # Should be in worktree
+    [[ "$PWD" == *"-worktrees/feature-switch-copy" ]]
+    # File should exist in worktree
+    [ -f ".env" ]
+    [[ "$(cat .env)" == "SECRET=abc" ]]
+}
+
+@test "sw add: .swcopy itself can be gitignored and copied" {
+    # .swcopy should be copied if it's gitignored and in .swcopy
+    cat > .gitignore <<'EOF'
+.env
+.swcopy
+EOF
+    echo "SECRET=abc" > .env
+    cat > .swcopy <<'EOF'
+.env
+.swcopy
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    run sw add feature-swcopy-copy
+
+    [ "$status" -eq 0 ]
+    # .swcopy should be copied
+    [ -f "$WT_DIR/feature-swcopy-copy/.swcopy" ]
+    [ -f "$WT_DIR/feature-swcopy-copy/.env" ]
+}
+
+# ============================================================================
+# sw add: .swsymlink support
+# ============================================================================
+
+@test "sw add: symlinks files listed in .swsymlink" {
+    # Create gitignore and files
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    echo "SECRET=abc" > .env
+    echo "local instructions" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Create .swcopy to include both files
+    cat > .swcopy <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    # Create .swsymlink to symlink CLAUDE.local.md
+    echo "CLAUDE.local.md" > .swsymlink
+
+    run sw add feature-symlink
+
+    [ "$status" -eq 0 ]
+    # .env should be copied (regular file)
+    [ -f "$WT_DIR/feature-symlink/.env" ]
+    [ ! -L "$WT_DIR/feature-symlink/.env" ]
+    # CLAUDE.local.md should be a symlink
+    [ -L "$WT_DIR/feature-symlink/CLAUDE.local.md" ]
+    # Symlink should point to base file
+    [[ "$(readlink "$WT_DIR/feature-symlink/CLAUDE.local.md")" == *"CLAUDE.local.md" ]]
+}
+
+@test "sw add: symlinked file content matches base" {
+    echo "CLAUDE.local.md" >> .gitignore
+    echo "original content" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "CLAUDE.local.md" > .swcopy
+    echo "CLAUDE.local.md" > .swsymlink
+
+    sw add feature-symlink-content
+
+    # Content should match
+    [[ "$(cat "$WT_DIR/feature-symlink-content/CLAUDE.local.md")" == "original content" ]]
+
+    # Modify base file
+    echo "modified content" > CLAUDE.local.md
+
+    # Worktree should see the change (because it's a symlink)
+    [[ "$(cat "$WT_DIR/feature-symlink-content/CLAUDE.local.md")" == "modified content" ]]
+}
+
+@test "sw add: .swsymlink supports glob patterns" {
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+.envrc
+EOF
+    echo "SECRET=abc" > .env
+    echo "local" > CLAUDE.local.md
+    echo "layout ruby" > .envrc
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Include all in .swcopy
+    cat > .swcopy <<'EOF'
+.env
+CLAUDE.local.md
+.envrc
+EOF
+    # Symlink CLAUDE* files
+    echo "CLAUDE*" > .swsymlink
+
+    run sw add feature-symlink-glob
+
+    [ "$status" -eq 0 ]
+    # .env should be copied (not symlinked)
+    [ -f "$WT_DIR/feature-symlink-glob/.env" ]
+    [ ! -L "$WT_DIR/feature-symlink-glob/.env" ]
+    # CLAUDE.local.md should be symlinked
+    [ -L "$WT_DIR/feature-symlink-glob/CLAUDE.local.md" ]
+    # .envrc should be copied (not symlinked)
+    [ -f "$WT_DIR/feature-symlink-glob/.envrc" ]
+    [ ! -L "$WT_DIR/feature-symlink-glob/.envrc" ]
+}
+
+@test "sw add: .swsymlink can symlink directories" {
+    echo "config/" >> .gitignore
+    mkdir -p config
+    echo "setting1" > config/app.yml
+    echo "setting2" > config/db.yml
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "config/" > .swcopy
+    echo "config/" > .swsymlink
+
+    run sw add feature-symlink-dir
+
+    [ "$status" -eq 0 ]
+    # config should be a symlink to directory
+    [ -L "$WT_DIR/feature-symlink-dir/config" ]
+    # Files inside should be accessible
+    [ -f "$WT_DIR/feature-symlink-dir/config/app.yml" ]
+}
+
+@test "sw add: outputs symlinked items separately" {
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    echo "SECRET=abc" > .env
+    echo "local" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Include both in .swcopy
+    cat > .swcopy <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    echo "CLAUDE.local.md" > .swsymlink
+
+    run sw add feature-symlink-output
+
+    [ "$status" -eq 0 ]
+    # Should show copied files
+    [[ "$output" == *"Copied:"* ]]
+    [[ "$output" == *".env"* ]]
+    # Should show symlinked files
+    [[ "$output" == *"Symlinked:"* ]]
+    [[ "$output" == *"CLAUDE.local.md"* ]]
+}
+
+@test "sw add: .swsymlink without .swcopy does nothing" {
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    echo "SECRET=abc" > .env
+    echo "local" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Only .swsymlink, no .swcopy
+    echo "CLAUDE.local.md" > .swsymlink
+
+    run sw add feature-symlink-only
+
+    [ "$status" -eq 0 ]
+    # Nothing should exist (no .swcopy)
+    [ ! -e "$WT_DIR/feature-symlink-only/.env" ]
+    [ ! -e "$WT_DIR/feature-symlink-only/CLAUDE.local.md" ]
+}

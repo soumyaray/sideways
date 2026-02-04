@@ -9,14 +9,14 @@
 
 **From base directory only:**
 
-| Command               | Description                                 |
-| --------------------- | ------------------------------------------- |
-| `sw add <branch>`     | Create worktree (new or existing branch)    |
-| `sw add -s <branch>`  | Create worktree and cd into it              |
-| `sw rm <branch>`      | Remove worktree (keep branch)               |
-| `sw rm -d <branch>`   | Remove worktree + delete branch (if merged) |
-| `sw rm -D <branch>`   | Remove worktree + force delete branch       |
-| `sw prune`            | Remove stale worktree references            |
+| Command               | Description                                        |
+| --------------------- | -------------------------------------------------- |
+| `sw add <branch>`     | Create worktree, copy gitignored files             |
+| `sw add -s <branch>`  | Create worktree and cd into it                     |
+| `sw rm <branch>`      | Remove worktree (keep branch)                      |
+| `sw rm -d <branch>`   | Remove worktree + delete branch (if merged)        |
+| `sw rm -D <branch>`   | Remove worktree + force delete branch              |
+| `sw prune`            | Remove stale worktree references                   |
 
 **From worktree subdirectory only:**
 
@@ -72,6 +72,8 @@ These tests run in actual zsh and catch issues that bash-based bats tests miss.
 - `tests/worktrees.bats` - test suite
 - `README.md` - user documentation
 - `scripts/release.sh` - release automation script
+- `.swcopy` - (user-created) patterns for gitignored files to copy
+- `.swsymlink` - (user-created) patterns to symlink instead of copy
 
 ---
 

@@ -5,6 +5,101 @@
 #   # Sideways - git worktree helper
 #   source ~/path/to/worktrees.sh
 
+# Copy gitignored files from base to new worktree
+# Args: $1 = base_dir, $2 = worktree_path
+_sw_copy_gitignored() {
+    local base_dir="$1"
+    local wt_path="$2"
+    local swcopy_file="$base_dir/.swcopy"
+    local swsymlink_file="$base_dir/.swsymlink"
+    local copied=()
+    local symlinked=()
+
+    # If no .swcopy file, don't copy anything
+    [[ ! -f "$swcopy_file" ]] && return 0
+
+    # Get list of gitignored files (top-level entries only)
+    local gitignored_items=()
+    local item
+    while IFS= read -r item; do
+        [[ -n "$item" ]] && gitignored_items+=("$item")
+    done < <(git -C "$base_dir" ls-files --others --ignored --exclude-standard 2>/dev/null | cut -d'/' -f1 | sort -u)
+
+    # Load .swcopy patterns
+    local swcopy_patterns=()
+    while IFS= read -r line; do
+        # Skip comments and blank lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// }" ]] && continue
+        swcopy_patterns+=("$line")
+    done < "$swcopy_file"
+
+    # Load .swsymlink patterns if file exists
+    local swsymlink_patterns=()
+    if [[ -f "$swsymlink_file" ]]; then
+        while IFS= read -r line; do
+            # Skip comments and blank lines
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${line// }" ]] && continue
+            swsymlink_patterns+=("$line")
+        done < "$swsymlink_file"
+    fi
+
+    # Process each gitignored item
+    for item in "${gitignored_items[@]}"; do
+        local should_copy=false
+        local should_symlink=false
+        local src="$base_dir/$item"
+
+        # Check against .swcopy patterns (must match to be included)
+        for pattern in "${swcopy_patterns[@]}"; do
+            local match_pattern="${pattern%/}"
+            local match_item="${item%/}"
+            if [[ "$match_item" == $match_pattern ]]; then
+                should_copy=true
+                break
+            fi
+        done
+
+        # Skip if not in .swcopy
+        $should_copy || continue
+
+        # Check against .swsymlink patterns
+        for pattern in "${swsymlink_patterns[@]}"; do
+            local match_pattern="${pattern%/}"
+            local match_item="${item%/}"
+            if [[ "$match_item" == $match_pattern ]]; then
+                should_symlink=true
+                break
+            fi
+        done
+
+        if [[ -e "$src" ]]; then
+            if $should_symlink; then
+                # Create symlink (use absolute path for reliability)
+                ln -s "$src" "$wt_path/$item" 2>/dev/null && symlinked+=("$item")
+            elif [[ -d "$src" ]]; then
+                cp -R "$src" "$wt_path/" 2>/dev/null && copied+=("$item/")
+            else
+                # Ensure parent directory exists for nested files
+                local parent_dir=$(dirname "$wt_path/$item")
+                [[ ! -d "$parent_dir" ]] && mkdir -p "$parent_dir"
+                cp "$src" "$wt_path/$item" 2>/dev/null && copied+=("$item")
+            fi
+        fi
+    done
+
+    # Output copied items
+    if [[ ${#copied[@]} -gt 0 ]]; then
+        echo "Copied: ${copied[*]}"
+    fi
+
+    # Output symlinked items
+    if [[ ${#symlinked[@]} -gt 0 ]]; then
+        echo "Symlinked: ${symlinked[*]}"
+    fi
+}
+
 sw() {
     local cmd="$1"
     shift 2>/dev/null
@@ -48,6 +143,7 @@ sw() {
             fi
 
             local wt_path="$worktrees_dir_rel/$branch"
+            local wt_abs_path="$worktrees_dir_abs/$branch"
             if git show-ref --verify --quiet "refs/heads/$branch"; then
                 # Branch exists, use it
                 if ! git worktree add "$wt_path" "$branch"; then
@@ -61,6 +157,9 @@ sw() {
                 fi
                 echo "Created: $wt_path (new branch $branch)"
             fi
+
+            # Copy gitignored files to new worktree
+            _sw_copy_gitignored "$base_dir" "$wt_abs_path"
 
             if $switch; then
                 cd "$wt_path"
@@ -267,6 +366,7 @@ From base directory only:
   add [-s|--switch] <branch>   Create worktree at ../<project>-worktrees/<branch>
                                Uses existing branch or creates new one
                                -s, --switch: cd into worktree after creation
+                               Copies gitignored files (see .swignore)
   rm [-d|-D] <branch>          Remove worktree (branch kept by default)
                                -d: also delete branch (if merged)
                                -D: also delete branch (force)
@@ -282,6 +382,12 @@ Anywhere:
   list, ls                     List all worktrees
   info                         Show current branch, path, location
   --help, -h                   Show this help message
+
+Config files:
+  .swcopy                      Patterns for gitignored files to copy
+                               (e.g., .env, CLAUDE.local.md)
+  .swsymlink                   Patterns to symlink instead of copy
+                               (e.g., CLAUDE.local.md)
 EOF
             ;;
 

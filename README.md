@@ -77,10 +77,10 @@ sw <command> [options]
 
 **From base directory only:**
 
-| Command               | Description                                 |
-| --------------------- | ------------------------------------------- |
-| `sw add <branch>`     | Create worktree (new or existing branch)    |
-| `sw add -s <branch>`  | Create worktree and cd into it              |
+| Command               | Description                                        |
+| --------------------- | -------------------------------------------------- |
+| `sw add <branch>`     | Create worktree, copy gitignored files (see below) |
+| `sw add -s <branch>`  | Create worktree and cd into it                     |
 |                       |                                             |
 | `sw rm <branch>`      | Remove worktree (keep branch)               |
 | `sw rm -d <branch>`   | Remove worktree + delete branch (if merged) |
@@ -148,6 +148,50 @@ Example with multiple projects:
   other-project-worktrees/
     experiment/                # worktree
 ```
+
+## Copying Gitignored Files
+
+When you create a worktree with `sw add`, gitignored files can be copied from base to the new worktree. By default, nothing is copied — you opt-in via `.swcopy`.
+
+### Specifying files to copy with `.swcopy`
+
+Create a `.swcopy` file in your repo root to list gitignored files that should be copied:
+
+```text
+# .swcopy - gitignored files to copy to new worktrees
+.env
+CLAUDE.local.md
+.envrc
+```
+
+```bash
+sw add feature-auth
+# Created: ../myapp-worktrees/feature-auth (new branch feature-auth)
+# Copied: .env CLAUDE.local.md .envrc
+```
+
+If no `.swcopy` exists, no gitignored files are copied.
+
+### Symlinking files with `.swsymlink`
+
+For files you want shared across all worktrees (changes reflected everywhere), create a `.swsymlink` file:
+
+```text
+# .swsymlink - files to symlink instead of copy
+CLAUDE.local.md
+```
+
+Files in both `.swcopy` and `.swsymlink` are symlinked to the base copy; others in `.swcopy` are copied. This is useful for config files that should stay in sync, while `.env` files (with port numbers, etc.) remain independent copies.
+
+### Config file format
+
+Both `.swcopy` and `.swsymlink` use the same format:
+
+- One pattern per line
+- Comments start with `#`
+- Glob patterns supported (`*.log`, `CLAUDE*`)
+- Directories should have trailing `/`
+- Files must be in `.swcopy` to be copied or symlinked
 
 ## Dependencies
 
