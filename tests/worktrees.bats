@@ -144,7 +144,7 @@ teardown() {
 # wt rm
 # ============================================================================
 
-@test "wt rm: removes worktree and branch" {
+@test "wt rm: removes worktree but keeps branch" {
     wt add feature-remove
 
     # Verify it exists first
@@ -153,13 +153,84 @@ teardown() {
     run wt rm feature-remove
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Removed:"* ]]
+    [[ "$output" == *"Removed worktree:"* ]]
 
     # Verify worktree is gone
     [ ! -d "$WT_DIR/feature-remove" ]
 
-    # Verify branch is gone
+    # Verify branch still exists
     run git branch --list feature-remove
+    [[ "$output" == *"feature-remove"* ]]
+}
+
+@test "wt rm -d: removes worktree and deletes merged branch" {
+    wt add feature-merged
+
+    # Make the branch "merged" by not adding any commits
+    # (it's at same point as main, so -d will work)
+
+    run wt rm -d feature-merged
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+    [[ "$output" == *"Deleted branch:"* ]]
+
+    # Verify worktree is gone
+    [ ! -d "$WT_DIR/feature-merged" ]
+
+    # Verify branch is gone
+    run git branch --list feature-merged
+    [ -z "$output" ]
+}
+
+@test "wt rm -d: removes worktree but fails to delete unmerged branch" {
+    wt add -s feature-unmerged
+
+    # Add a commit so the branch is not merged
+    echo "unmerged change" > unmerged.txt
+    git add unmerged.txt
+    git commit -m "Unmerged commit"
+
+    # Go back to base
+    wt base
+
+    run wt rm -d feature-unmerged
+
+    # Command succeeds (worktree removed) but branch deletion fails
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+    [[ "$output" == *"not fully merged"* ]]
+
+    # Verify worktree is gone
+    [ ! -d "$WT_DIR/feature-unmerged" ]
+
+    # Verify branch still exists (deletion failed)
+    run git branch --list feature-unmerged
+    [[ "$output" == *"feature-unmerged"* ]]
+}
+
+@test "wt rm -D: removes worktree and force deletes unmerged branch" {
+    wt add -s feature-force
+
+    # Add a commit so the branch is not merged
+    echo "force delete change" > force.txt
+    git add force.txt
+    git commit -m "Force delete commit"
+
+    # Go back to base
+    wt base
+
+    run wt rm -D feature-force
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+    [[ "$output" == *"Deleted branch:"* ]]
+
+    # Verify worktree is gone
+    [ ! -d "$WT_DIR/feature-force" ]
+
+    # Verify branch is gone (force deleted)
+    run git branch --list feature-force
     [ -z "$output" ]
 }
 
@@ -168,6 +239,15 @@ teardown() {
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"Usage: wt rm"* ]]
+}
+
+@test "wt rm: rejects unknown options" {
+    wt add feature-bad-opt
+
+    run wt rm -x feature-bad-opt
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Unknown option: -x"* ]]
 }
 
 # ============================================================================

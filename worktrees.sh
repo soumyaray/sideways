@@ -93,9 +93,18 @@ wt() {
                 return 1
             fi
 
+            local delete_flag=""
+            while [[ "$1" == -* ]]; do
+                case "$1" in
+                    -d) delete_flag="-d"; shift ;;
+                    -D) delete_flag="-D"; shift ;;
+                    *) echo "Unknown option: $1" >&2; return 1 ;;
+                esac
+            done
+
             local branch="$1"
             if [[ -z "$branch" ]]; then
-                echo "Usage: wt rm <branch-name>" >&2
+                echo "Usage: wt rm [-d|-D] <branch-name>" >&2
                 return 1
             fi
 
@@ -103,8 +112,15 @@ wt() {
             if ! git worktree remove "$path"; then
                 return 1
             fi
-            git branch -d "$branch" 2>/dev/null
-            echo "Removed: $path and branch $branch"
+            echo "Removed worktree: $path"
+
+            if [[ -n "$delete_flag" ]]; then
+                if git branch "$delete_flag" "$branch" 2>/dev/null; then
+                    echo "Deleted branch: $branch"
+                else
+                    echo "Branch $branch not fully merged. Use -D to force delete." >&2
+                fi
+            fi
             ;;
 
         list|ls)
@@ -194,7 +210,9 @@ From base folder only:
   add [-s|--switch] <branch>   Create worktree at ../<project>-worktrees/<branch>
                                Uses existing branch or creates new one
                                -s, --switch: cd into worktree after creation
-  rm <branch>                  Remove worktree and delete branch
+  rm [-d|-D] <branch>          Remove worktree (branch kept by default)
+                               -d: also delete branch (if merged)
+                               -D: also delete branch (force)
   prune                        Remove stale worktree references
 
 From worktree subfolder only:

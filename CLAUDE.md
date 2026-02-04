@@ -9,12 +9,14 @@
 
 **From base folder only:**
 
-| Command              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `wt add <branch>`    | Create worktree (new or existing branch) |
-| `wt add -s <branch>` | Create worktree and cd into it           |
-| `wt rm <branch>`     | Remove worktree and delete branch        |
-| `wt prune`           | Remove stale worktree references         |
+| Command               | Description                                 |
+| --------------------- | ------------------------------------------- |
+| `wt add <branch>`     | Create worktree (new or existing branch)    |
+| `wt add -s <branch>`  | Create worktree and cd into it              |
+| `wt rm <branch>`      | Remove worktree (keep branch)               |
+| `wt rm -d <branch>`   | Remove worktree + delete branch (if merged) |
+| `wt rm -D <branch>`   | Remove worktree + force delete branch       |
+| `wt prune`            | Remove stale worktree references            |
 
 **From worktree subfolder only:**
 
@@ -46,7 +48,7 @@
 
 ### Testing
 
-32 tests using bats-core:
+36 tests using bats-core:
 
 ```bash
 brew install bats-core  # if needed

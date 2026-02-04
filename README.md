@@ -42,20 +42,25 @@ wt <command> [options]
 
 **From base folder only:**
 
-| Command              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `wt add <branch>`    | Create worktree (new or existing branch) |
-| `wt add -s <branch>` | Create worktree and cd into it           |
-| `wt rm <branch>`     | Remove worktree and delete branch        |
-| `wt prune`           | Remove stale worktree references         |
+| Command               | Description                                 |
+| --------------------- | ------------------------------------------- |
+| `wt add <branch>`     | Create worktree (new or existing branch)    |
+| `wt add -s <branch>`  | Create worktree and cd into it              |
+|                       |                                             |
+| `wt rm <branch>`      | Remove worktree (keep branch)               |
+| `wt rm -d <branch>`   | Remove worktree + delete branch (if merged) |
+| `wt rm -D <branch>`   | Remove worktree + force delete branch       |
+|                       |                                             |
+| `wt prune`            | Remove stale worktree references            |
 
 **From worktree subfolder only:**
 
-| Command              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `wt base`            | Jump back to base                        |
-| `wt rebase`          | Fetch and rebase onto main               |
-| `wt done`            | Remove worktree (keep branch), cd to base|
+| Command              | Description                               |
+| -------------------- | ----------------------------------------- |
+| `wt base`            | Jump back to base                         |
+|                      |                                           |
+| `wt rebase`          | Fetch and rebase onto main                |
+| `wt done`            | Remove worktree (keep branch), cd to base |
 
 **Anywhere:**
 
@@ -63,6 +68,7 @@ wt <command> [options]
 | -------------------- | ---------------------------------------- |
 | `wt cd <branch>`     | Switch to worktree                       |
 | `wt cd`              | Interactive selection via fzf            |
+|                      |                                          |
 | `wt list` / `wt ls`  | List all worktrees                       |
 | `wt info`            | Show current branch, path, location      |
 | `wt --help`          | Show help                                |
@@ -74,7 +80,8 @@ wt <command> [options]
 wt add -s feature-login    # Create worktree and switch to it
 wt cd feature-login        # Switch to existing worktree
 wt cd                      # Interactive picker (requires fzf)
-wt rm feature-login        # Remove worktree and delete branch
+wt rm feature-login        # Remove worktree (keep branch)
+wt rm -D feature-login     # Remove worktree and force delete branch
 
 # From worktree: navigate and sync
 wt info                    # See where you are
