@@ -202,11 +202,26 @@ if $DRY_RUN; then
     SHA256="<sha256-would-be-calculated>"
 else
     info "Fetching tarball from GitHub..."
-    TARBALL=$(curl -sL "$TARBALL_URL")
 
-    if [[ -z "$TARBALL" ]]; then
-        error "Failed to fetch tarball from $TARBALL_URL"
-    fi
+    # Retry loop to wait for GitHub to generate the tarball
+    MAX_ATTEMPTS=5
+    ATTEMPT=1
+    while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
+        TARBALL=$(curl -sL "$TARBALL_URL")
+
+        # Verify tarball contains expected content (worktrees.sh)
+        if echo "$TARBALL" | tar -tzf - 2>/dev/null | grep -q "worktrees.sh"; then
+            break
+        fi
+
+        if [[ $ATTEMPT -eq $MAX_ATTEMPTS ]]; then
+            error "Failed to fetch valid tarball after $MAX_ATTEMPTS attempts"
+        fi
+
+        warn "Tarball not ready, retrying in 3 seconds... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+        sleep 3
+        ATTEMPT=$((ATTEMPT + 1))
+    done
 
     SHA256=$(echo "$TARBALL" | shasum -a 256 | awk '{print $1}')
 
