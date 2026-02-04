@@ -258,8 +258,9 @@ teardown() {
     run sw list
 
     [ "$status" -eq 0 ]
-    # Should show at least the main worktree
-    [[ "$output" == *"$TEST_DIR"* ]]
+    # Should show at least the main worktree with new format: branch location commit
+    [[ "$output" == *"main"* ]]
+    [[ "$output" == *"base"* ]]
 }
 
 @test "sw ls: alias works" {
@@ -279,6 +280,29 @@ teardown() {
 
     [[ "$output" == *"feature-a"* ]]
     [[ "$output" == *"feature-b"* ]]
+}
+
+@test "sw list: shows current worktree indicator" {
+    sw add -s feature-current
+    # Now in the worktree
+    [[ "$PWD" == *"-worktrees/feature-current" ]]
+
+    run sw list
+
+    # Current worktree should have asterisk marker
+    [[ "$output" == *"* feature-current"* ]]
+    # Base should not have asterisk (space instead)
+    [[ "$output" == *"  main"* ]]
+}
+
+@test "sw list: shows modified status" {
+    sw add -s feature-dirty
+    # Make uncommitted changes in the worktree
+    echo "dirty" >> README.md
+
+    run sw list
+
+    [[ "$output" == *"feature-dirty"*"[modified]"* ]]
 }
 
 # ============================================================================

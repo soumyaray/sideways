@@ -124,7 +124,53 @@ sw() {
             ;;
 
         list|ls)
-            git worktree list
+            local wt_path wt_commit wt_branch location marker dirty
+            local current_path="$repo_root"
+            while IFS= read -r line; do
+                case "$line" in
+                    worktree\ *)
+                        wt_path="${line#worktree }"
+                        ;;
+                    HEAD\ *)
+                        wt_commit="${line#HEAD }"
+                        wt_commit="${wt_commit:0:7}"  # Short hash
+                        ;;
+                    branch\ *)
+                        wt_branch="${line#branch refs/heads/}"
+                        ;;
+                    detached)
+                        wt_branch="(detached)"
+                        ;;
+                    "")
+                        # End of entry, output it
+                        if [[ -n "$wt_path" ]]; then
+                            # Determine location type
+                            if [[ "$wt_path" == "$base_dir" ]]; then
+                                location="base"
+                            else
+                                location="worktree"
+                            fi
+
+                            # Current worktree indicator
+                            if [[ "$wt_path" == "$current_path" ]]; then
+                                marker="*"
+                            else
+                                marker=" "
+                            fi
+
+                            # Check for uncommitted changes
+                            if [[ -n "$(git -C "$wt_path" status --porcelain 2>/dev/null)" ]]; then
+                                dirty="[modified]"
+                            else
+                                dirty=""
+                            fi
+
+                            printf "%s %-19s %-10s %s  %s\n" "$marker" "$wt_branch" "$location" "$wt_commit" "$dirty"
+                        fi
+                        wt_path="" wt_commit="" wt_branch=""
+                        ;;
+                esac
+            done < <(git worktree list --porcelain; echo)
             ;;
 
         prune)
