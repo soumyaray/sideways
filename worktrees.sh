@@ -159,14 +159,11 @@ wt() {
             ;;
 
         rebase)
-            # Fetch and rebase current branch onto main
-            local main_branch
-            if git show-ref --verify --quiet refs/heads/main; then
-                main_branch="main"
-            elif git show-ref --verify --quiet refs/heads/master; then
-                main_branch="master"
-            else
-                echo "wt: could not find main or master branch" >&2
+            # Fetch and rebase current branch onto specified branch
+            local target_branch="$1"
+            if [[ -z "$target_branch" ]]; then
+                echo "Usage: wt rebase <branch>" >&2
+                echo "Example: wt rebase main" >&2
                 return 1
             fi
 
@@ -174,8 +171,8 @@ wt() {
             if ! git fetch; then
                 return 1
             fi
-            echo "Rebasing onto origin/$main_branch..."
-            git rebase "origin/$main_branch"
+            echo "Rebasing onto origin/$target_branch..."
+            git rebase "origin/$target_branch"
             ;;
 
         done)
@@ -215,7 +212,7 @@ From base directory only:
 
 From worktree subdirectory only:
   base                         Jump back to base
-  rebase                       Fetch and rebase onto main
+  rebase <branch>              Fetch and rebase onto origin/<branch>
   done                         Remove worktree (keep branch), cd to base
 
 Anywhere:

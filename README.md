@@ -28,7 +28,7 @@ Resulting directory structure:
 **Why this over [other worktree tools](https://github.com/topics/git-worktree)?**
 
 - **Zero dependencies** — pure shell (~230 lines), optional fzf for interactive selection
-- **Workflow commands** — `wt rebase` (sync with main), `wt done` (cleanup and return to base)
+- **Workflow commands** — `wt rebase <branch>` (sync with any branch), `wt done` (cleanup and return to base)
 - **Safety guards** — blocks `add`/`rm` from worktree subdirectories to prevent mistakes
 
 ## Installation
@@ -65,7 +65,7 @@ wt <command> [options]
 | -------------------- | ----------------------------------------- |
 | `wt base`            | Jump back to base                         |
 |                      |                                           |
-| `wt rebase`          | Fetch and rebase onto main                |
+| `wt rebase <branch>` | Fetch and rebase onto origin/\<branch\>   |
 | `wt done`            | Remove worktree (keep branch), cd to base |
 
 **Anywhere:**
@@ -91,7 +91,7 @@ wt rm -D feature-login     # Remove worktree and force delete branch
 
 # From worktree: navigate and sync
 wt info                    # See where you are
-wt rebase                  # Fetch and rebase onto main
+wt rebase main             # Fetch and rebase onto origin/main
 wt base                    # Jump back to base
 wt done                    # Remove worktree (keep branch), cd to base
 ```

@@ -23,7 +23,7 @@
 | Command              | Description                              |
 | -------------------- | ---------------------------------------- |
 | `wt base`            | Jump back to base                        |
-| `wt rebase`          | Fetch and rebase onto main               |
+| `wt rebase <branch>` | Fetch and rebase onto origin/\<branch\>  |
 | `wt done`            | Remove worktree (keep branch), cd to base|
 
 **Anywhere:**

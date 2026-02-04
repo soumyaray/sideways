@@ -440,9 +440,16 @@ teardown() {
 # wt rebase
 # ============================================================================
 
+@test "wt rebase: requires branch argument" {
+    run wt rebase
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Usage: wt rebase <branch>"* ]]
+}
+
 @test "wt rebase: fails without remote" {
     # No remote configured in test repo
-    run wt rebase
+    run wt rebase main
 
     [ "$status" -ne 0 ]
 }
