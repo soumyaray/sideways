@@ -25,6 +25,12 @@ Resulting directory structure:
     pr-review/              # worktree (on pr-review branch)
 ```
 
+**Why this over [other worktree tools](https://github.com/topics/git-worktree)?**
+
+- **Zero dependencies** — pure shell (~230 lines), optional fzf for interactive selection
+- **Workflow commands** — `wt rebase` (sync with main), `wt done` (cleanup and return to base)
+- **Safety guards** — blocks `add`/`rm` from worktree subdirectories to prevent mistakes
+
 ## Installation
 
 Source the script in your shell configuration:
