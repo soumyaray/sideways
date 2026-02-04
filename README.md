@@ -14,6 +14,8 @@ sw add -s fix-issue        # Creates worktree and switches to it
 sw base                    # Back to ~/code/myapp (base, on main branch)
 
 sw list                    # See all worktrees
+#   main                  base       a1b2c3d
+# * fix-issue             worktree   e4f5g6h  [modified]
 ```
 
 Resulting directory structure:
@@ -75,7 +77,7 @@ sw <command> [options]
 | `sw cd <branch>`     | Switch to worktree                       |
 | `sw cd`              | Interactive selection via fzf            |
 |                      |                                          |
-| `sw list` / `sw ls`  | List all worktrees                       |
+| `sw list` / `sw ls`  | List worktrees (* = current, [modified]) |
 | `sw info`            | Show current branch, path, location      |
 | `sw --help`          | Show help                                |
 

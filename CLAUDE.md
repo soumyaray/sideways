@@ -32,7 +32,7 @@
 | -------------------- | ---------------------------------------- |
 | `sw cd <branch>`     | Switch to worktree                       |
 | `sw cd`              | Interactive selection via fzf            |
-| `sw list` / `sw ls`  | List all worktrees                       |
+| `sw list` / `sw ls`  | List worktrees (* = current, [modified]) |
 | `sw info`            | Show current branch, path, location      |
 | `sw --help` / `sw`   | Show help                                |
 
@@ -48,7 +48,7 @@
 
 ### Testing
 
-36 tests using bats-core:
+39 tests using bats-core:
 
 ```bash
 brew install bats-core  # if needed
