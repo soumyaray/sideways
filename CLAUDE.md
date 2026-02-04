@@ -1,4 +1,4 @@
-# Git Worktree Shortcuts - Planning Document
+# Git Worktree Shortcuts
 
 ## Shell Function: wt
 
@@ -20,32 +20,32 @@
 
 ### Design Decisions
 
-- Branch prefix: none (use branch name directly)
-- Base branch: current HEAD
-- Path convention: `../<project>-worktrees/<branch>`
+- Path convention: `../<project>-worktrees/<branch>` (project name derived from git repo root)
 - Auto-detect: `wt add` uses existing branch if present, creates new otherwise
+- Base branch: current HEAD
+- Branch naming: no prefixes enforced
+- Error handling: git errors are propagated (wt add/rm fail properly)
 
 ### Testing
 
+22 tests using bats-core:
+
 ```bash
+brew install bats-core  # if needed
 bats tests/worktrees.bats
 ```
 
-Requires [bats-core](https://github.com/bats-core/bats-core): `brew install bats-core`
+Tests cover: add (new/existing branch), cd, rm, list, prune, help, and error cases.
+
+### Key Files
+
+- `worktrees.sh` - the shell function
+- `tests/worktrees.bats` - test suite
+- `README.md` - user documentation
 
 ---
 
-## Later Reference
+## Future Ideas
 
-### Claude Command (optional, for interactive workflows)
-
-For complex scenarios where you want Claude to help pick the base branch, validate naming, or set up related items. Create in `~/.claude/commands/`.
-
-### Use Case Summary
-
-| Operation                 | Best Tool      | Why                                           |
-| ------------------------- | -------------- | --------------------------------------------- |
-| Quick list/prune          | Git alias      | Fast, no overhead                             |
-| Create with conventions   | Shell function | Needs logic for naming/base branch            |
-| Interactive creation      | Claude command | Can prompt for issue #, validate branch names |
-| Bulk cleanup              | Shell function | Needs iteration logic                         |
+- Claude command for interactive workflows (issue #, branch naming conventions)
+- Bulk cleanup command
