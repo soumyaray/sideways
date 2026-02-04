@@ -109,6 +109,15 @@ sw() {
             fi
 
             local path="$worktrees_dir_rel/$branch"
+            local abs_path="$worktrees_dir_abs/$branch"
+
+            # Guard: check for uncommitted changes
+            if [[ -n "$(git -C "$abs_path" status --porcelain 2>/dev/null)" ]]; then
+                echo "sw: worktree '$branch' has uncommitted changes" >&2
+                echo "Commit or stash changes before removing" >&2
+                return 1
+            fi
+
             if ! git worktree remove "$path"; then
                 return 1
             fi
@@ -229,6 +238,13 @@ sw() {
 
             if [[ "$current_path" == "$base_dir" ]]; then
                 echo "sw: not in a worktree (already in base directory)" >&2
+                return 1
+            fi
+
+            # Guard: check for uncommitted changes
+            if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+                echo "sw: current worktree has uncommitted changes" >&2
+                echo "Commit or stash changes before removing" >&2
                 return 1
             fi
 

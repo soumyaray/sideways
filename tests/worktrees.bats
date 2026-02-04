@@ -415,6 +415,17 @@ teardown() {
     [[ "$output" == *"must be run from base directory"* ]]
 }
 
+@test "sw rm: fails with uncommitted changes" {
+    sw add feature-dirty-rm
+    # Make uncommitted changes in the worktree
+    echo "dirty" >> "$TEST_DIR/../$(basename "$TEST_DIR")-worktrees/feature-dirty-rm/README.md"
+
+    run sw rm feature-dirty-rm
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"uncommitted changes"* ]]
+}
+
 # ============================================================================
 # sw base
 # ============================================================================
@@ -505,4 +516,15 @@ teardown() {
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"not in a worktree"* ]]
+}
+
+@test "sw done: fails with uncommitted changes" {
+    sw add -s feature-dirty-done
+    # Make uncommitted changes
+    echo "dirty" >> README.md
+
+    run sw done
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"uncommitted changes"* ]]
 }
