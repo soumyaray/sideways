@@ -35,11 +35,23 @@ Resulting directory structure:
 
 ## Installation
 
-Source the script in your shell configuration:
+### Quick install
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/soumyaray/sideways/main/install.sh | bash
+```
+
+This clones to `~/.sideways` and adds it to your shell config. Restart your shell or run `source ~/.zshrc`.
+
+### Manual install
+
+Clone and source in your shell configuration:
+
+```bash
+git clone https://github.com/soumyaray/sideways.git ~/.sideways
+
 # Add to ~/.zshrc or ~/.bashrc
-source /path/to/worktrees.sh
+source ~/.sideways/worktrees.sh
 ```
 
 ## Usage
