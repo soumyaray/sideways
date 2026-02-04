@@ -5,6 +5,40 @@
 #   # Sideways - git worktree helper
 #   source ~/path/to/worktrees.sh
 
+# =============================================================================
+# MODEL LAYER - Core business logic and state queries
+# =============================================================================
+
+# Get base directory (first worktree is always the main one)
+_sw_get_base_dir() {
+    git worktree list --porcelain | head -1 | sed 's/^worktree //'
+}
+
+# Check if worktree has uncommitted changes
+# Args: $1 = worktree path (optional, defaults to current directory)
+_sw_has_uncommitted_changes() {
+    local wt_path="${1:-.}"
+    [[ -n "$(git -C "$wt_path" status --porcelain 2>/dev/null)" ]]
+}
+
+# Check if current path is the base directory
+# Args: $1 = current path, $2 = base directory
+_sw_is_in_base() {
+    [[ "$1" == "$2" ]]
+}
+
+# Guard: ensure command is run from base directory
+# Args: $1 = repo_root, $2 = base_dir, $3 = command name, $4+ = original args
+_sw_guard_base_dir() {
+    local repo_root="$1" base_dir="$2" cmd_name="$3"
+    shift 3
+    if [[ "$repo_root" != "$base_dir" ]]; then
+        _sw_error "$cmd_name must be run from base directory"
+        echo "Run 'sw base' first, then 'sw $cmd_name $*'" >&2
+        return 1
+    fi
+}
+
 # Copy gitignored files from base to new worktree
 # Args: $1 = base_dir, $2 = worktree_path
 _sw_copy_gitignored() {
@@ -100,264 +134,275 @@ _sw_copy_gitignored() {
     fi
 }
 
-sw() {
-    local cmd="$1"
-    shift 2>/dev/null
+# =============================================================================
+# VIEW LAYER - Output formatting
+# =============================================================================
 
-    # Compute project-specific worktrees directory
-    local repo_root base_dir proj_name worktrees_dir_rel worktrees_dir_abs
-    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-        echo "sw: not in a git repository" >&2
+# Standardized error output
+_sw_error() {
+    echo "sw: $*" >&2
+}
+
+# =============================================================================
+# CONTROLLER LAYER - Command handlers
+# =============================================================================
+
+# sw add: Create a new worktree
+# Args: $1=repo_root, $2=base_dir, $3=worktrees_dir_rel, $4=worktrees_dir_abs, $5+=command args
+_sw_cmd_add() {
+    local repo_root="$1" base_dir="$2" worktrees_dir_rel="$3" worktrees_dir_abs="$4"
+    shift 4
+
+    # Guard: must be in base directory
+    _sw_guard_base_dir "$repo_root" "$base_dir" "add" "$@" || return 1
+
+    local switch=false
+    while [[ "$1" == -* ]]; do
+        case "$1" in
+            -s|--switch) switch=true; shift ;;
+            *) _sw_error "Unknown option: $1"; return 1 ;;
+        esac
+    done
+
+    local branch="$1"
+    if [[ -z "$branch" ]]; then
+        _sw_error "Usage: sw add [-s|--switch] <branch-name>"
         return 1
-    }
+    fi
 
-    # Get base directory (first worktree is always the main one)
-    base_dir=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
+    local wt_path="$worktrees_dir_rel/$branch"
+    local wt_abs_path="$worktrees_dir_abs/$branch"
+    if git show-ref --verify --quiet "refs/heads/$branch"; then
+        # Branch exists, use it
+        if ! git worktree add "$wt_path" "$branch"; then
+            return 1
+        fi
+        echo "Created: $wt_path (existing branch $branch)"
+    else
+        # Create new branch
+        if ! git worktree add "$wt_path" -b "$branch"; then
+            return 1
+        fi
+        echo "Created: $wt_path (new branch $branch)"
+    fi
 
-    # Compute paths relative to base (works from anywhere)
-    proj_name=$(basename "$base_dir")
-    worktrees_dir_rel="../${proj_name}-worktrees"                    # relative (for add/rm from base)
-    worktrees_dir_abs="$(dirname "$base_dir")/${proj_name}-worktrees" # absolute (for cd from anywhere)
+    # Copy gitignored files to new worktree
+    _sw_copy_gitignored "$base_dir" "$wt_abs_path"
 
-    case "$cmd" in
-        add)
-            # Guard: must be in base directory
-            if [[ "$repo_root" != "$base_dir" ]]; then
-                echo "sw: add must be run from base directory" >&2
-                echo "Run 'sw base' first, then 'sw add $*'" >&2
-                return 1
-            fi
+    if $switch; then
+        cd "$wt_path"
+    fi
+}
 
-            local switch=false
-            while [[ "$1" == -* ]]; do
-                case "$1" in
-                    -s|--switch) switch=true; shift ;;
-                    *) echo "Unknown option: $1" >&2; return 1 ;;
-                esac
-            done
+# sw cd: Change to a worktree directory
+# Args: $1=worktrees_dir_abs, $2+=command args
+_sw_cmd_cd() {
+    local worktrees_dir_abs="$1"
+    shift
 
-            local branch="$1"
-            if [[ -z "$branch" ]]; then
-                echo "Usage: sw add [-s|--switch] <branch-name>" >&2
-                return 1
-            fi
+    local branch="$1"
+    if [[ -n "$branch" ]]; then
+        cd "$worktrees_dir_abs/$branch"
+    elif command -v fzf &>/dev/null; then
+        local selected
+        selected=$(git worktree list | fzf | awk '{print $1}')
+        [[ -n "$selected" ]] && cd "$selected"
+    else
+        echo "Interactive mode requires fzf. Install it with:" >&2
+        echo "  brew install fzf    # macOS" >&2
+        echo "  apt install fzf     # Debian/Ubuntu" >&2
+        echo "  winget install fzf  # Windows" >&2
+        echo "Or provide a branch name: sw cd <branch-name>" >&2
+        return 1
+    fi
+}
 
-            local wt_path="$worktrees_dir_rel/$branch"
-            local wt_abs_path="$worktrees_dir_abs/$branch"
-            if git show-ref --verify --quiet "refs/heads/$branch"; then
-                # Branch exists, use it
-                if ! git worktree add "$wt_path" "$branch"; then
-                    return 1
+# sw rm: Remove a worktree
+# Args: $1=repo_root, $2=base_dir, $3=worktrees_dir_rel, $4=worktrees_dir_abs, $5+=command args
+_sw_cmd_rm() {
+    local repo_root="$1" base_dir="$2" worktrees_dir_rel="$3" worktrees_dir_abs="$4"
+    shift 4
+
+    # Guard: must be in base directory
+    _sw_guard_base_dir "$repo_root" "$base_dir" "rm" "$@" || return 1
+
+    local delete_flag=""
+    while [[ "$1" == -* ]]; do
+        case "$1" in
+            -d) delete_flag="-d"; shift ;;
+            -D) delete_flag="-D"; shift ;;
+            *) _sw_error "Unknown option: $1"; return 1 ;;
+        esac
+    done
+
+    local branch="$1"
+    if [[ -z "$branch" ]]; then
+        _sw_error "Usage: sw rm [-d|-D] <branch-name>"
+        return 1
+    fi
+
+    local wt_path="$worktrees_dir_rel/$branch"
+    local wt_abs_path="$worktrees_dir_abs/$branch"
+
+    # Guard: check for uncommitted changes
+    if _sw_has_uncommitted_changes "$wt_abs_path"; then
+        _sw_error "worktree '$branch' has uncommitted changes"
+        echo "Commit or stash changes before removing" >&2
+        return 1
+    fi
+
+    if ! git worktree remove "$wt_path"; then
+        return 1
+    fi
+    echo "Removed worktree: $wt_path"
+
+    if [[ -n "$delete_flag" ]]; then
+        if git branch "$delete_flag" "$branch" 2>/dev/null; then
+            echo "Deleted branch: $branch"
+        else
+            echo "Branch $branch not fully merged. Use -D to force delete." >&2
+        fi
+    fi
+}
+
+# sw list: List all worktrees
+# Args: $1=repo_root, $2=base_dir
+_sw_cmd_list() {
+    local repo_root="$1" base_dir="$2"
+
+    local wt_path wt_commit wt_branch location marker dirty
+    local current_path="$repo_root"
+    while IFS= read -r line; do
+        case "$line" in
+            worktree\ *)
+                wt_path="${line#worktree }"
+                ;;
+            HEAD\ *)
+                wt_commit="${line#HEAD }"
+                wt_commit="${wt_commit:0:7}"  # Short hash
+                ;;
+            branch\ *)
+                wt_branch="${line#branch refs/heads/}"
+                ;;
+            detached)
+                wt_branch="(detached)"
+                ;;
+            "")
+                # End of entry, output it
+                if [[ -n "$wt_path" ]]; then
+                    # Determine location type
+                    if [[ "$wt_path" == "$base_dir" ]]; then
+                        location="base"
+                    else
+                        location="worktree"
+                    fi
+
+                    # Current worktree indicator
+                    if [[ "$wt_path" == "$current_path" ]]; then
+                        marker="*"
+                    else
+                        marker=" "
+                    fi
+
+                    # Check for uncommitted changes
+                    if _sw_has_uncommitted_changes "$wt_path"; then
+                        dirty="[modified]"
+                    else
+                        dirty=""
+                    fi
+
+                    printf "%s %-19s %-10s %s  %s\n" "$marker" "$wt_branch" "$location" "$wt_commit" "$dirty"
                 fi
-                echo "Created: $wt_path (existing branch $branch)"
-            else
-                # Create new branch
-                if ! git worktree add "$wt_path" -b "$branch"; then
-                    return 1
-                fi
-                echo "Created: $wt_path (new branch $branch)"
-            fi
+                wt_path="" wt_commit="" wt_branch=""
+                ;;
+        esac
+    done < <(git worktree list --porcelain; echo)
+}
 
-            # Copy gitignored files to new worktree
-            _sw_copy_gitignored "$base_dir" "$wt_abs_path"
+# sw prune: Prune stale worktree references
+_sw_cmd_prune() {
+    git worktree prune
+    echo "Pruned stale worktree references"
+}
 
-            if $switch; then
-                cd "$wt_path"
-            fi
-            ;;
+# sw base: Jump back to base directory
+# Args: $1=repo_root, $2=base_dir
+_sw_cmd_base() {
+    local repo_root="$1" base_dir="$2"
 
-        cd)
-            local branch="$1"
-            if [[ -n "$branch" ]]; then
-                cd "$worktrees_dir_abs/$branch"
-            elif command -v fzf &>/dev/null; then
-                local selected
-                selected=$(git worktree list | fzf | awk '{print $1}')
-                [[ -n "$selected" ]] && cd "$selected"
-            else
-                echo "Interactive mode requires fzf. Install it with:" >&2
-                echo "  brew install fzf    # macOS" >&2
-                echo "  apt install fzf     # Debian/Ubuntu" >&2
-                echo "  winget install fzf  # Windows" >&2
-                echo "Or provide a branch name: sw cd <branch-name>" >&2
-                return 1
-            fi
-            ;;
+    if _sw_is_in_base "$repo_root" "$base_dir"; then
+        echo "Already in base directory: $base_dir"
+        return 0
+    fi
+    cd "$base_dir"
+}
 
-        rm)
-            # Guard: must be in base directory
-            if [[ "$repo_root" != "$base_dir" ]]; then
-                echo "sw: rm must be run from base directory" >&2
-                echo "Run 'sw base' first, then 'sw rm $*'" >&2
-                return 1
-            fi
+# sw info: Show current worktree info
+_sw_cmd_info() {
+    local current_path current_branch info_base_dir location
+    current_path=$(git rev-parse --show-toplevel)
+    current_branch=$(git branch --show-current)
+    info_base_dir=$(_sw_get_base_dir)
 
-            local delete_flag=""
-            while [[ "$1" == -* ]]; do
-                case "$1" in
-                    -d) delete_flag="-d"; shift ;;
-                    -D) delete_flag="-D"; shift ;;
-                    *) echo "Unknown option: $1" >&2; return 1 ;;
-                esac
-            done
+    if _sw_is_in_base "$current_path" "$info_base_dir"; then
+        location="base"
+    else
+        location="worktree"
+    fi
 
-            local branch="$1"
-            if [[ -z "$branch" ]]; then
-                echo "Usage: sw rm [-d|-D] <branch-name>" >&2
-                return 1
-            fi
+    echo "Branch:   $current_branch"
+    echo "Path:     $current_path"
+    echo "Location: $location"
+}
 
-            local wt_path="$worktrees_dir_rel/$branch"
-            local wt_abs_path="$worktrees_dir_abs/$branch"
+# sw rebase: Fetch and rebase onto a branch
+# Args: $1+=command args
+_sw_cmd_rebase() {
+    local target_branch="$1"
+    if [[ -z "$target_branch" ]]; then
+        echo "Usage: sw rebase <branch>" >&2
+        echo "Example: sw rebase main" >&2
+        return 1
+    fi
 
-            # Guard: check for uncommitted changes
-            if [[ -n "$(git -C "$wt_abs_path" status --porcelain 2>/dev/null)" ]]; then
-                echo "sw: worktree '$branch' has uncommitted changes" >&2
-                echo "Commit or stash changes before removing" >&2
-                return 1
-            fi
+    echo "Fetching from origin..."
+    if ! git fetch; then
+        return 1
+    fi
+    echo "Rebasing onto origin/$target_branch..."
+    git rebase "origin/$target_branch"
+}
 
-            if ! git worktree remove "$wt_path"; then
-                return 1
-            fi
-            echo "Removed worktree: $wt_path"
+# sw done: Remove current worktree and return to base
+_sw_cmd_done() {
+    local current_path done_base_dir
+    current_path=$(git rev-parse --show-toplevel)
+    done_base_dir=$(_sw_get_base_dir)
 
-            if [[ -n "$delete_flag" ]]; then
-                if git branch "$delete_flag" "$branch" 2>/dev/null; then
-                    echo "Deleted branch: $branch"
-                else
-                    echo "Branch $branch not fully merged. Use -D to force delete." >&2
-                fi
-            fi
-            ;;
+    if _sw_is_in_base "$current_path" "$done_base_dir"; then
+        _sw_error "not in a worktree (already in base directory)"
+        return 1
+    fi
 
-        list|ls)
-            local wt_path wt_commit wt_branch location marker dirty
-            local current_path="$repo_root"
-            while IFS= read -r line; do
-                case "$line" in
-                    worktree\ *)
-                        wt_path="${line#worktree }"
-                        ;;
-                    HEAD\ *)
-                        wt_commit="${line#HEAD }"
-                        wt_commit="${wt_commit:0:7}"  # Short hash
-                        ;;
-                    branch\ *)
-                        wt_branch="${line#branch refs/heads/}"
-                        ;;
-                    detached)
-                        wt_branch="(detached)"
-                        ;;
-                    "")
-                        # End of entry, output it
-                        if [[ -n "$wt_path" ]]; then
-                            # Determine location type
-                            if [[ "$wt_path" == "$base_dir" ]]; then
-                                location="base"
-                            else
-                                location="worktree"
-                            fi
+    # Guard: check for uncommitted changes
+    if _sw_has_uncommitted_changes; then
+        _sw_error "current worktree has uncommitted changes"
+        echo "Commit or stash changes before removing" >&2
+        return 1
+    fi
 
-                            # Current worktree indicator
-                            if [[ "$wt_path" == "$current_path" ]]; then
-                                marker="*"
-                            else
-                                marker=" "
-                            fi
+    # Move to base first, then remove worktree
+    cd "$done_base_dir" || return 1
+    if ! git worktree remove "$current_path"; then
+        return 1
+    fi
+    echo "Removed worktree: $current_path"
+    echo "Branch preserved. Now in base directory: $done_base_dir"
+}
 
-                            # Check for uncommitted changes
-                            if [[ -n "$(git -C "$wt_path" status --porcelain 2>/dev/null)" ]]; then
-                                dirty="[modified]"
-                            else
-                                dirty=""
-                            fi
-
-                            printf "%s %-19s %-10s %s  %s\n" "$marker" "$wt_branch" "$location" "$wt_commit" "$dirty"
-                        fi
-                        wt_path="" wt_commit="" wt_branch=""
-                        ;;
-                esac
-            done < <(git worktree list --porcelain; echo)
-            ;;
-
-        prune)
-            git worktree prune
-            echo "Pruned stale worktree references"
-            ;;
-
-        base)
-            # Jump back to base
-            if [[ "$repo_root" == "$base_dir" ]]; then
-                echo "Already in base directory: $base_dir"
-                return 0
-            fi
-            cd "$base_dir"
-            ;;
-
-        info)
-            local current_path current_branch base_dir location
-            current_path=$(git rev-parse --show-toplevel)
-            current_branch=$(git branch --show-current)
-            base_dir=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
-
-            if [[ "$current_path" == "$base_dir" ]]; then
-                location="base"
-            else
-                location="worktree"
-            fi
-
-            echo "Branch:   $current_branch"
-            echo "Path:     $current_path"
-            echo "Location: $location"
-            ;;
-
-        rebase)
-            # Fetch and rebase current branch onto specified branch
-            local target_branch="$1"
-            if [[ -z "$target_branch" ]]; then
-                echo "Usage: sw rebase <branch>" >&2
-                echo "Example: sw rebase main" >&2
-                return 1
-            fi
-
-            echo "Fetching from origin..."
-            if ! git fetch; then
-                return 1
-            fi
-            echo "Rebasing onto origin/$target_branch..."
-            git rebase "origin/$target_branch"
-            ;;
-
-        done)
-            # Remove current worktree (keep branch), cd to base
-            local current_path base_dir
-            current_path=$(git rev-parse --show-toplevel)
-            base_dir=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
-
-            if [[ "$current_path" == "$base_dir" ]]; then
-                echo "sw: not in a worktree (already in base directory)" >&2
-                return 1
-            fi
-
-            # Guard: check for uncommitted changes
-            if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
-                echo "sw: current worktree has uncommitted changes" >&2
-                echo "Commit or stash changes before removing" >&2
-                return 1
-            fi
-
-            # Move to base first, then remove worktree
-            cd "$base_dir" || return 1
-            if ! git worktree remove "$current_path"; then
-                return 1
-            fi
-            echo "Removed worktree: $current_path"
-            echo "Branch preserved. Now in base directory: $base_dir"
-            ;;
-
-        help|-h|--help|"")
-            cat <<'EOF'
+# sw help: Show help message
+_sw_cmd_help() {
+    cat <<'EOF'
 Sideways - Git Worktree Helper
 
 Usage: sw <command> [options]
@@ -389,8 +434,44 @@ Config files:
   .swsymlink                   Patterns to symlink instead of copy
                                (e.g., CLAUDE.local.md)
 EOF
-            ;;
+}
 
+# =============================================================================
+# ROUTER - Main entry point
+# =============================================================================
+
+sw() {
+    local cmd="$1"
+    shift 2>/dev/null
+
+    # Compute project-specific worktrees directory
+    local repo_root base_dir proj_name worktrees_dir_rel worktrees_dir_abs
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        _sw_error "not in a git repository"
+        return 1
+    }
+
+    # Get base directory (first worktree is always the main one)
+    base_dir=$(_sw_get_base_dir)
+
+    # Compute paths relative to base (works from anywhere)
+    proj_name=$(basename "$base_dir")
+    worktrees_dir_rel="../${proj_name}-worktrees"                    # relative (for add/rm from base)
+    worktrees_dir_abs="$(dirname "$base_dir")/${proj_name}-worktrees" # absolute (for cd from anywhere)
+
+    # Route to command handler
+    case "$cmd" in
+        add)      _sw_cmd_add "$repo_root" "$base_dir" "$worktrees_dir_rel" "$worktrees_dir_abs" "$@" ;;
+        cd)       _sw_cmd_cd "$worktrees_dir_abs" "$@" ;;
+        rm)       _sw_cmd_rm "$repo_root" "$base_dir" "$worktrees_dir_rel" "$worktrees_dir_abs" "$@" ;;
+        list|ls)  _sw_cmd_list "$repo_root" "$base_dir" ;;
+        prune)    _sw_cmd_prune ;;
+        base)     _sw_cmd_base "$repo_root" "$base_dir" ;;
+        info)     _sw_cmd_info ;;
+        rebase)   _sw_cmd_rebase "$@" ;;
+        done)     _sw_cmd_done ;;
+        help|-h|--help|"")
+                  _sw_cmd_help ;;
         *)
             echo "Unknown command: $cmd" >&2
             echo "Run 'sw help' for usage" >&2
