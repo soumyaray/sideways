@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for worktrees.sh - Git Worktree Helper Functions
+# Tests for worktrees.sh - Sideways Git Worktree Helper
 #
 # Run with: bats tests/worktrees.bats
 # Install bats: brew install bats-core
@@ -29,7 +29,7 @@ setup() {
     git add README.md
     git commit -m "Initial commit"
 
-    # Source the script to make the wt function available
+    # Source the script to make the sw function available
     source "$SCRIPT_PATH"
 }
 
@@ -44,11 +44,11 @@ teardown() {
 }
 
 # ============================================================================
-# wt add
+# sw add
 # ============================================================================
 
-@test "wt add: creates worktree with new branch" {
-    run wt add feature-test
+@test "sw add: creates worktree with new branch" {
+    run sw add feature-test
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"(new branch feature-test)"* ]]
@@ -61,15 +61,15 @@ teardown() {
     [[ "$output" == *"feature-test"* ]]
 }
 
-@test "wt add: fails without branch name" {
-    run wt add
+@test "sw add: fails without branch name" {
+    run sw add
 
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Usage: wt add"* ]]
+    [[ "$output" == *"Usage: sw add"* ]]
 }
 
-@test "wt add -s: creates worktree and switches to it" {
-    wt add -s feature-switch
+@test "sw add -s: creates worktree and switches to it" {
+    sw add -s feature-switch
 
     # Verify we're now in the worktree directory
     [[ "$PWD" == *"-worktrees/feature-switch" ]]
@@ -79,24 +79,24 @@ teardown() {
     [ "$output" = "feature-switch" ]
 }
 
-@test "wt add --switch: long form works" {
-    wt add --switch feature-long
+@test "sw add --switch: long form works" {
+    sw add --switch feature-long
 
     [[ "$PWD" == *"-worktrees/feature-long" ]]
 }
 
-@test "wt add: rejects unknown options" {
-    run wt add -x feature-bad
+@test "sw add: rejects unknown options" {
+    run sw add -x feature-bad
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"Unknown option: -x"* ]]
 }
 
-@test "wt add: creates multiple worktrees" {
-    run wt add feature-one
+@test "sw add: creates multiple worktrees" {
+    run sw add feature-one
     [ "$status" -eq 0 ]
 
-    run wt add feature-two
+    run sw add feature-two
     [ "$status" -eq 0 ]
 
     [ -d "$WT_DIR/feature-one" ]
@@ -104,22 +104,22 @@ teardown() {
 }
 
 # ============================================================================
-# wt cd
+# sw cd
 # ============================================================================
 
-@test "wt cd: changes to existing worktree" {
-    wt add feature-cd
-    wt cd feature-cd
+@test "sw cd: changes to existing worktree" {
+    sw add feature-cd
+    sw cd feature-cd
 
     [[ "$PWD" == *"-worktrees/feature-cd" ]]
 }
 
-@test "wt cd: without fzf and no branch shows install message" {
+@test "sw cd: without fzf and no branch shows install message" {
     # Temporarily hide fzf if it exists
     local old_path="$PATH"
     PATH="/usr/bin:/bin"
 
-    run wt cd
+    run sw cd
 
     PATH="$old_path"
 
@@ -127,12 +127,12 @@ teardown() {
     [[ "$output" == *"Interactive mode requires fzf"* ]]
 }
 
-@test "wt cd: works from inside a worktree" {
-    wt add feature-one
-    wt add -s feature-two
+@test "sw cd: works from inside a worktree" {
+    sw add feature-one
+    sw add -s feature-two
     # Now we're in feature-two worktree
 
-    wt cd feature-one
+    sw cd feature-one
     # Should be in feature-one worktree
 
     [[ "$PWD" == *"-worktrees/feature-one" ]]
@@ -141,16 +141,16 @@ teardown() {
 }
 
 # ============================================================================
-# wt rm
+# sw rm
 # ============================================================================
 
-@test "wt rm: removes worktree but keeps branch" {
-    wt add feature-remove
+@test "sw rm: removes worktree but keeps branch" {
+    sw add feature-remove
 
     # Verify it exists first
     [ -d "$WT_DIR/feature-remove" ]
 
-    run wt rm feature-remove
+    run sw rm feature-remove
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Removed worktree:"* ]]
@@ -163,13 +163,13 @@ teardown() {
     [[ "$output" == *"feature-remove"* ]]
 }
 
-@test "wt rm -d: removes worktree and deletes merged branch" {
-    wt add feature-merged
+@test "sw rm -d: removes worktree and deletes merged branch" {
+    sw add feature-merged
 
     # Make the branch "merged" by not adding any commits
     # (it's at same point as main, so -d will work)
 
-    run wt rm -d feature-merged
+    run sw rm -d feature-merged
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Removed worktree:"* ]]
@@ -183,8 +183,8 @@ teardown() {
     [ -z "$output" ]
 }
 
-@test "wt rm -d: removes worktree but fails to delete unmerged branch" {
-    wt add -s feature-unmerged
+@test "sw rm -d: removes worktree but fails to delete unmerged branch" {
+    sw add -s feature-unmerged
 
     # Add a commit so the branch is not merged
     echo "unmerged change" > unmerged.txt
@@ -192,9 +192,9 @@ teardown() {
     git commit -m "Unmerged commit"
 
     # Go back to base
-    wt base
+    sw base
 
-    run wt rm -d feature-unmerged
+    run sw rm -d feature-unmerged
 
     # Command succeeds (worktree removed) but branch deletion fails
     [ "$status" -eq 0 ]
@@ -209,8 +209,8 @@ teardown() {
     [[ "$output" == *"feature-unmerged"* ]]
 }
 
-@test "wt rm -D: removes worktree and force deletes unmerged branch" {
-    wt add -s feature-force
+@test "sw rm -D: removes worktree and force deletes unmerged branch" {
+    sw add -s feature-force
 
     # Add a commit so the branch is not merged
     echo "force delete change" > force.txt
@@ -218,9 +218,9 @@ teardown() {
     git commit -m "Force delete commit"
 
     # Go back to base
-    wt base
+    sw base
 
-    run wt rm -D feature-force
+    run sw rm -D feature-force
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Removed worktree:"* ]]
@@ -234,72 +234,72 @@ teardown() {
     [ -z "$output" ]
 }
 
-@test "wt rm: fails without branch name" {
-    run wt rm
+@test "sw rm: fails without branch name" {
+    run sw rm
 
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Usage: wt rm"* ]]
+    [[ "$output" == *"Usage: sw rm"* ]]
 }
 
-@test "wt rm: rejects unknown options" {
-    wt add feature-bad-opt
+@test "sw rm: rejects unknown options" {
+    sw add feature-bad-opt
 
-    run wt rm -x feature-bad-opt
+    run sw rm -x feature-bad-opt
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"Unknown option: -x"* ]]
 }
 
 # ============================================================================
-# wt list / wt ls
+# sw list / wt ls
 # ============================================================================
 
-@test "wt list: shows worktrees" {
-    run wt list
+@test "sw list: shows worktrees" {
+    run sw list
 
     [ "$status" -eq 0 ]
     # Should show at least the main worktree
     [[ "$output" == *"$TEST_DIR"* ]]
 }
 
-@test "wt ls: alias works" {
-    wt add feature-ls
+@test "sw ls: alias works" {
+    sw add feature-ls
 
-    run wt ls
+    run sw ls
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"feature-ls"* ]]
 }
 
-@test "wt list: shows multiple worktrees" {
-    wt add feature-a
-    wt add feature-b
+@test "sw list: shows multiple worktrees" {
+    sw add feature-a
+    sw add feature-b
 
-    run wt list
+    run sw list
 
     [[ "$output" == *"feature-a"* ]]
     [[ "$output" == *"feature-b"* ]]
 }
 
 # ============================================================================
-# wt prune
+# sw prune
 # ============================================================================
 
-@test "wt prune: runs without error" {
-    run wt prune
+@test "sw prune: runs without error" {
+    run sw prune
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Pruned stale worktree references"* ]]
 }
 
-@test "wt prune: cleans stale references" {
-    wt add feature-stale
+@test "sw prune: cleans stale references" {
+    sw add feature-stale
 
     # Manually remove the directory without using git worktree remove
     rm -rf "$WT_DIR/feature-stale"
 
     # Now prune should clean it up
-    run wt prune
+    run sw prune
 
     [ "$status" -eq 0 ]
 
@@ -309,116 +309,116 @@ teardown() {
 }
 
 # ============================================================================
-# wt help
+# sw help
 # ============================================================================
 
-@test "wt help: shows usage" {
-    run wt help
+@test "sw help: shows usage" {
+    run sw help
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Git Worktree Helper"* ]]
+    [[ "$output" == *"Sideways"* ]]
     [[ "$output" == *"From base directory"* ]]
 }
 
-@test "wt --help: flag works" {
-    run wt --help
+@test "sw --help: flag works" {
+    run sw --help
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Git Worktree Helper"* ]]
+    [[ "$output" == *"Sideways"* ]]
 }
 
-@test "wt -h: short flag works" {
-    run wt -h
+@test "sw -h: short flag works" {
+    run sw -h
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Git Worktree Helper"* ]]
+    [[ "$output" == *"Sideways"* ]]
 }
 
-@test "wt: no args shows help" {
-    run wt
+@test "sw: no args shows help" {
+    run sw
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Git Worktree Helper"* ]]
+    [[ "$output" == *"Sideways - Git Worktree Helper"* ]]
 }
 
 # ============================================================================
 # Error handling
 # ============================================================================
 
-@test "wt: unknown command fails" {
-    run wt badcommand
+@test "sw: unknown command fails" {
+    run sw badcommand
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"Unknown command: badcommand"* ]]
-    [[ "$output" == *"Run 'wt help'"* ]]
+    [[ "$output" == *"Run 'sw help'"* ]]
 }
 
-@test "wt add: uses existing branch" {
+@test "sw add: uses existing branch" {
     # Create a branch without a worktree
     git branch feature-existing
 
-    run wt add feature-existing
+    run sw add feature-existing
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"(existing branch feature-existing)"* ]]
     [ -d "$WT_DIR/feature-existing" ]
 }
 
-@test "wt add: fails if worktree already exists" {
-    wt add feature-dup
+@test "sw add: fails if worktree already exists" {
+    sw add feature-dup
 
-    run wt add feature-dup
+    run sw add feature-dup
 
     [ "$status" -ne 0 ]
 }
 
-@test "wt add: fails from inside a worktree" {
-    wt add -s feature-nested
+@test "sw add: fails from inside a worktree" {
+    sw add -s feature-nested
 
-    run wt add another-branch
+    run sw add another-branch
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"must be run from base directory"* ]]
 }
 
-@test "wt rm: fails from inside a worktree" {
-    wt add feature-rm-test
-    wt add -s feature-in-wt
+@test "sw rm: fails from inside a worktree" {
+    sw add feature-rm-test
+    sw add -s feature-in-wt
 
-    run wt rm feature-rm-test
+    run sw rm feature-rm-test
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"must be run from base directory"* ]]
 }
 
 # ============================================================================
-# wt base
+# sw base
 # ============================================================================
 
-@test "wt base: jumps to base from worktree" {
-    wt add -s feature-base
+@test "sw base: jumps to base from worktree" {
+    sw add -s feature-base
     # Now we're in the worktree
     [[ "$PWD" == *"-worktrees/feature-base" ]]
 
-    wt base
+    sw base
 
     # Should be back in the original test directory (base)
     [[ "$PWD" == "$TEST_DIR" ]]
 }
 
-@test "wt base: shows message when already in base" {
-    run wt base
+@test "sw base: shows message when already in base" {
+    run sw base
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Already in base directory"* ]]
 }
 
 # ============================================================================
-# wt info
+# sw info
 # ============================================================================
 
-@test "wt info: shows info when in base" {
-    run wt info
+@test "sw info: shows info when in base" {
+    run sw info
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Branch:"* ]]
@@ -426,10 +426,10 @@ teardown() {
     [[ "$output" == *"Location: base"* ]]
 }
 
-@test "wt info: shows info when in worktree" {
-    wt add -s feature-info
+@test "sw info: shows info when in worktree" {
+    sw add -s feature-info
 
-    run wt info
+    run sw info
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Branch:   feature-info"* ]]
@@ -437,33 +437,33 @@ teardown() {
 }
 
 # ============================================================================
-# wt rebase
+# sw rebase
 # ============================================================================
 
-@test "wt rebase: requires branch argument" {
-    run wt rebase
+@test "sw rebase: requires branch argument" {
+    run sw rebase
 
     [ "$status" -ne 0 ]
-    [[ "$output" == *"Usage: wt rebase <branch>"* ]]
+    [[ "$output" == *"Usage: sw rebase <branch>"* ]]
 }
 
-@test "wt rebase: fails without remote" {
+@test "sw rebase: fails without remote" {
     # No remote configured in test repo
-    run wt rebase main
+    run sw rebase main
 
     [ "$status" -ne 0 ]
 }
 
 # ============================================================================
-# wt done
+# sw done
 # ============================================================================
 
-@test "wt done: removes worktree and keeps branch" {
-    wt add -s feature-done
+@test "sw done: removes worktree and keeps branch" {
+    sw add -s feature-done
     # Now we're in the worktree
     [[ "$PWD" == *"-worktrees/feature-done" ]]
 
-    wt done
+    sw done
 
     # Should be back in base
     [[ "$PWD" == "$TEST_DIR" ]]
@@ -476,8 +476,8 @@ teardown() {
     [[ "$output" == *"feature-done"* ]]
 }
 
-@test "wt done: fails when in base" {
-    run wt done
+@test "sw done: fails when in base" {
+    run sw done
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"not in a worktree"* ]]

@@ -1,18 +1,18 @@
-# Git Worktree Helper Functions
+# Sideways - Git Worktree Helper
 #
 # Source this file in ~/.zshrc or ~/.bashrc:
 #
-#   # Git worktree helper
+#   # Sideways - git worktree helper
 #   source ~/path/to/worktrees.sh
 
-wt() {
+sw() {
     local cmd="$1"
     shift 2>/dev/null
 
     # Compute project-specific worktrees directory
     local repo_root main_wt proj_name wt_base wt_dir
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-        echo "wt: not in a git repository" >&2
+        echo "sw: not in a git repository" >&2
         return 1
     }
 
@@ -28,8 +28,8 @@ wt() {
         add)
             # Guard: must be in base directory
             if [[ "$repo_root" != "$main_wt" ]]; then
-                echo "wt: add must be run from base directory" >&2
-                echo "Run 'wt base' first, then 'wt add $*'" >&2
+                echo "sw: add must be run from base directory" >&2
+                echo "Run 'sw base' first, then 'sw add $*'" >&2
                 return 1
             fi
 
@@ -43,7 +43,7 @@ wt() {
 
             local branch="$1"
             if [[ -z "$branch" ]]; then
-                echo "Usage: wt add [-s|--switch] <branch-name>" >&2
+                echo "Usage: sw add [-s|--switch] <branch-name>" >&2
                 return 1
             fi
 
@@ -80,7 +80,7 @@ wt() {
                 echo "  brew install fzf    # macOS" >&2
                 echo "  apt install fzf     # Debian/Ubuntu" >&2
                 echo "  winget install fzf  # Windows" >&2
-                echo "Or provide a branch name: wt cd <branch-name>" >&2
+                echo "Or provide a branch name: sw cd <branch-name>" >&2
                 return 1
             fi
             ;;
@@ -88,8 +88,8 @@ wt() {
         rm)
             # Guard: must be in base directory
             if [[ "$repo_root" != "$main_wt" ]]; then
-                echo "wt: rm must be run from base directory" >&2
-                echo "Run 'wt base' first, then 'wt rm $*'" >&2
+                echo "sw: rm must be run from base directory" >&2
+                echo "Run 'sw base' first, then 'sw rm $*'" >&2
                 return 1
             fi
 
@@ -104,7 +104,7 @@ wt() {
 
             local branch="$1"
             if [[ -z "$branch" ]]; then
-                echo "Usage: wt rm [-d|-D] <branch-name>" >&2
+                echo "Usage: sw rm [-d|-D] <branch-name>" >&2
                 return 1
             fi
 
@@ -162,8 +162,8 @@ wt() {
             # Fetch and rebase current branch onto specified branch
             local target_branch="$1"
             if [[ -z "$target_branch" ]]; then
-                echo "Usage: wt rebase <branch>" >&2
-                echo "Example: wt rebase main" >&2
+                echo "Usage: sw rebase <branch>" >&2
+                echo "Example: sw rebase main" >&2
                 return 1
             fi
 
@@ -182,7 +182,7 @@ wt() {
             main_wt=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
 
             if [[ "$current_path" == "$main_wt" ]]; then
-                echo "wt: not in a worktree (already in base directory)" >&2
+                echo "sw: not in a worktree (already in base directory)" >&2
                 return 1
             fi
 
@@ -197,9 +197,9 @@ wt() {
 
         help|-h|--help|"")
             cat <<'EOF'
-Git Worktree Helper
+Sideways - Git Worktree Helper
 
-Usage: wt <command> [options]
+Usage: sw <command> [options]
 
 From base directory only:
   add [-s|--switch] <branch>   Create worktree at ../<project>-worktrees/<branch>
@@ -225,7 +225,7 @@ EOF
 
         *)
             echo "Unknown command: $cmd" >&2
-            echo "Run 'wt help' for usage" >&2
+            echo "Run 'sw help' for usage" >&2
             return 1
             ;;
     esac
