@@ -252,7 +252,7 @@ else
     # Update formula
     info "Updating formula..."
     sed -i '' "s|/tags/v[0-9.]*\.tar\.gz|/tags/$TAG.tar.gz|" Formula/sideways.rb
-    sed -i '' "s|sha256 \"[a-f0-9]*\"|sha256 \"$SHA256\"|" Formula/sideways.rb
+    sed -i '' "s|sha256 \"[^\"]*\"|sha256 \"$SHA256\"|" Formula/sideways.rb
 
     success "Updated Formula/sideways.rb"
 
