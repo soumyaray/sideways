@@ -35,6 +35,15 @@ Resulting directory structure:
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+brew tap soumyaray/sideways
+brew install sideways
+```
+
+Then follow the caveats to add the source line to your shell config.
+
 ### Quick install
 
 ```bash
