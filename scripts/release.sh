@@ -203,14 +203,18 @@ if $DRY_RUN; then
 else
     info "Fetching tarball from GitHub..."
 
+    # Use temp file for binary tarball data
+    TARBALL_FILE=$(mktemp)
+    trap "rm -f '$TARBALL_FILE'" EXIT
+
     # Retry loop to wait for GitHub to generate the tarball
     MAX_ATTEMPTS=5
     ATTEMPT=1
     while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
-        TARBALL=$(curl -sL "$TARBALL_URL")
+        curl -sL "$TARBALL_URL" -o "$TARBALL_FILE"
 
         # Verify tarball contains expected content (worktrees.sh)
-        if echo "$TARBALL" | tar -tzf - 2>/dev/null | grep -q "worktrees.sh"; then
+        if tar -tzf "$TARBALL_FILE" 2>/dev/null | grep -q "worktrees.sh"; then
             break
         fi
 
@@ -223,7 +227,7 @@ else
         ATTEMPT=$((ATTEMPT + 1))
     done
 
-    SHA256=$(echo "$TARBALL" | shasum -a 256 | awk '{print $1}')
+    SHA256=$(shasum -a 256 "$TARBALL_FILE" | awk '{print $1}')
 
     if [[ -z "$SHA256" ]] || [[ ${#SHA256} -ne 64 ]]; then
         error "Failed to calculate valid SHA256"
