@@ -7,7 +7,7 @@
 
 ### Usage Summary
 
-**From base folder only:**
+**From base directory only:**
 
 | Command               | Description                                 |
 | --------------------- | ------------------------------------------- |
@@ -18,7 +18,7 @@
 | `wt rm -D <branch>`   | Remove worktree + force delete branch       |
 | `wt prune`            | Remove stale worktree references            |
 
-**From worktree subfolder only:**
+**From worktree subdirectory only:**
 
 | Command              | Description                              |
 | -------------------- | ---------------------------------------- |
@@ -44,7 +44,7 @@
 - Branch naming: no prefixes enforced
 - Error handling: git errors are propagated (wt add/rm fail properly)
 - Terminology: "base" = main working directory, "worktree" = created via `wt add`
-- Guards: `wt add` and `wt rm` blocked from worktree subfolders (must run from base)
+- Guards: `wt add` and `wt rm` blocked from worktree subdirectories (must run from base)
 
 ### Testing
 

@@ -40,7 +40,7 @@ source /path/to/worktrees.sh
 wt <command> [options]
 ```
 
-**From base folder only:**
+**From base directory only:**
 
 | Command               | Description                                 |
 | --------------------- | ------------------------------------------- |
@@ -53,7 +53,7 @@ wt <command> [options]
 |                       |                                             |
 | `wt prune`            | Remove stale worktree references            |
 
-**From worktree subfolder only:**
+**From worktree subdirectory only:**
 
 | Command              | Description                               |
 | -------------------- | ----------------------------------------- |
@@ -133,7 +133,7 @@ bats tests/worktrees.bats
 
 ## Background
 
-Git worktrees let you have multiple branches checked out simultaneously in separate directories. Instead of stashing or committing work-in-progress to switch branches, you just `cd` to another folder.
+Git worktrees let you have multiple branches checked out simultaneously in separate directories. Instead of stashing or committing work-in-progress to switch branches, you just `cd` to another directory.
 
 **The problem:** Git's built-in worktree commands are verbose and don't enforce any directory structure, making it easy to scatter worktrees everywhere.
 

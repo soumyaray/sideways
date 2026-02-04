@@ -16,7 +16,7 @@ wt() {
         return 1
     }
 
-    # Get base folder (first worktree is always the main one)
+    # Get base directory (first worktree is always the main one)
     main_wt=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
 
     # Compute paths relative to base (works from anywhere)
@@ -26,9 +26,9 @@ wt() {
 
     case "$cmd" in
         add)
-            # Guard: must be in base folder
+            # Guard: must be in base directory
             if [[ "$repo_root" != "$main_wt" ]]; then
-                echo "wt: add must be run from base folder" >&2
+                echo "wt: add must be run from base directory" >&2
                 echo "Run 'wt base' first, then 'wt add $*'" >&2
                 return 1
             fi
@@ -86,9 +86,9 @@ wt() {
             ;;
 
         rm)
-            # Guard: must be in base folder
+            # Guard: must be in base directory
             if [[ "$repo_root" != "$main_wt" ]]; then
-                echo "wt: rm must be run from base folder" >&2
+                echo "wt: rm must be run from base directory" >&2
                 echo "Run 'wt base' first, then 'wt rm $*'" >&2
                 return 1
             fi
@@ -134,11 +134,9 @@ wt() {
 
         base)
             # Jump back to base
-            local main_wt
-            main_wt=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
-            if [[ -z "$main_wt" ]]; then
-                echo "wt: could not find base" >&2
-                return 1
+            if [[ "$repo_root" == "$main_wt" ]]; then
+                echo "Already in base directory: $main_wt"
+                return 0
             fi
             cd "$main_wt"
             ;;
@@ -187,7 +185,7 @@ wt() {
             main_wt=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
 
             if [[ "$current_path" == "$main_wt" ]]; then
-                echo "wt: not in a worktree (already in base)" >&2
+                echo "wt: not in a worktree (already in base directory)" >&2
                 return 1
             fi
 
@@ -197,7 +195,7 @@ wt() {
                 return 1
             fi
             echo "Removed worktree: $current_path"
-            echo "Branch preserved. Now in base: $main_wt"
+            echo "Branch preserved. Now in base directory: $main_wt"
             ;;
 
         help|-h|--help|"")
@@ -206,7 +204,7 @@ Git Worktree Helper
 
 Usage: wt <command> [options]
 
-From base folder only:
+From base directory only:
   add [-s|--switch] <branch>   Create worktree at ../<project>-worktrees/<branch>
                                Uses existing branch or creates new one
                                -s, --switch: cd into worktree after creation
@@ -215,7 +213,7 @@ From base folder only:
                                -D: also delete branch (force)
   prune                        Remove stale worktree references
 
-From worktree subfolder only:
+From worktree subdirectory only:
   base                         Jump back to base
   rebase                       Fetch and rebase onto main
   done                         Remove worktree (keep branch), cd to base

@@ -317,7 +317,7 @@ teardown() {
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Git Worktree Helper"* ]]
-    [[ "$output" == *"From base folder"* ]]
+    [[ "$output" == *"From base directory"* ]]
 }
 
 @test "wt --help: flag works" {
@@ -378,7 +378,7 @@ teardown() {
     run wt add another-branch
 
     [ "$status" -eq 1 ]
-    [[ "$output" == *"must be run from base folder"* ]]
+    [[ "$output" == *"must be run from base directory"* ]]
 }
 
 @test "wt rm: fails from inside a worktree" {
@@ -388,7 +388,7 @@ teardown() {
     run wt rm feature-rm-test
 
     [ "$status" -eq 1 ]
-    [[ "$output" == *"must be run from base folder"* ]]
+    [[ "$output" == *"must be run from base directory"* ]]
 }
 
 # ============================================================================
@@ -406,10 +406,11 @@ teardown() {
     [[ "$PWD" == "$TEST_DIR" ]]
 }
 
-@test "wt base: works when already in base" {
-    wt base
+@test "wt base: shows message when already in base" {
+    run wt base
 
-    [[ "$PWD" == "$TEST_DIR" ]]
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Already in base directory"* ]]
 }
 
 # ============================================================================
