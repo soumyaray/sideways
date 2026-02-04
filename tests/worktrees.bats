@@ -9,15 +9,17 @@ SCRIPT_PATH="$BATS_TEST_DIRNAME/../worktrees.sh"
 
 setup() {
     # Create a temporary directory for our test git repo
+    # Use pwd -P to resolve symlinks (macOS /var -> /private/var)
     TEST_DIR=$(mktemp -d)
+    cd "$TEST_DIR"
+    TEST_DIR=$(pwd -P)
     ORIG_DIR="$PWD"
 
     # Compute the project-specific worktrees directory
     TEST_PROJ=$(basename "$TEST_DIR")
     WT_DIR="$(dirname "$TEST_DIR")/${TEST_PROJ}-worktrees"
 
-    # Initialize a git repo
-    cd "$TEST_DIR"
+    # Initialize a git repo (already in TEST_DIR)
     git init --initial-branch=main
     git config user.email "test@example.com"
     git config user.name "Test User"
@@ -125,6 +127,19 @@ teardown() {
     [[ "$output" == *"Interactive mode requires fzf"* ]]
 }
 
+@test "wt cd: works from inside a worktree" {
+    wt add feature-one
+    wt add -s feature-two
+    # Now we're in feature-two worktree
+
+    wt cd feature-one
+    # Should be in feature-one worktree
+
+    [[ "$PWD" == *"-worktrees/feature-one" ]]
+    run git branch --show-current
+    [ "$output" = "feature-one" ]
+}
+
 # ============================================================================
 # wt rm
 # ============================================================================
@@ -222,7 +237,7 @@ teardown() {
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Git Worktree Helper"* ]]
-    [[ "$output" == *"Commands:"* ]]
+    [[ "$output" == *"From base folder"* ]]
 }
 
 @test "wt --help: flag works" {
@@ -275,4 +290,107 @@ teardown() {
     run wt add feature-dup
 
     [ "$status" -ne 0 ]
+}
+
+@test "wt add: fails from inside a worktree" {
+    wt add -s feature-nested
+
+    run wt add another-branch
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"must be run from base folder"* ]]
+}
+
+@test "wt rm: fails from inside a worktree" {
+    wt add feature-rm-test
+    wt add -s feature-in-wt
+
+    run wt rm feature-rm-test
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"must be run from base folder"* ]]
+}
+
+# ============================================================================
+# wt base
+# ============================================================================
+
+@test "wt base: jumps to base from worktree" {
+    wt add -s feature-base
+    # Now we're in the worktree
+    [[ "$PWD" == *"-worktrees/feature-base" ]]
+
+    wt base
+
+    # Should be back in the original test directory (base)
+    [[ "$PWD" == "$TEST_DIR" ]]
+}
+
+@test "wt base: works when already in base" {
+    wt base
+
+    [[ "$PWD" == "$TEST_DIR" ]]
+}
+
+# ============================================================================
+# wt info
+# ============================================================================
+
+@test "wt info: shows info when in base" {
+    run wt info
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Branch:"* ]]
+    [[ "$output" == *"Path:"* ]]
+    [[ "$output" == *"Location: base"* ]]
+}
+
+@test "wt info: shows info when in worktree" {
+    wt add -s feature-info
+
+    run wt info
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Branch:   feature-info"* ]]
+    [[ "$output" == *"Location: worktree"* ]]
+}
+
+# ============================================================================
+# wt rebase
+# ============================================================================
+
+@test "wt rebase: fails without remote" {
+    # No remote configured in test repo
+    run wt rebase
+
+    [ "$status" -ne 0 ]
+}
+
+# ============================================================================
+# wt done
+# ============================================================================
+
+@test "wt done: removes worktree and keeps branch" {
+    wt add -s feature-done
+    # Now we're in the worktree
+    [[ "$PWD" == *"-worktrees/feature-done" ]]
+
+    wt done
+
+    # Should be back in base
+    [[ "$PWD" == "$TEST_DIR" ]]
+
+    # Worktree should be gone
+    [ ! -d "$WT_DIR/feature-done" ]
+
+    # Branch should still exist
+    run git branch --list feature-done
+    [[ "$output" == *"feature-done"* ]]
+}
+
+@test "wt done: fails when in base" {
+    run wt done
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"not in a worktree"* ]]
 }

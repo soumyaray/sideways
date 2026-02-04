@@ -7,35 +7,53 @@
 
 ### Usage Summary
 
+**From base folder only:**
+
 | Command              | Description                              |
 | -------------------- | ---------------------------------------- |
 | `wt add <branch>`    | Create worktree (new or existing branch) |
 | `wt add -s <branch>` | Create worktree and cd into it           |
+| `wt rm <branch>`     | Remove worktree and delete branch        |
+| `wt prune`           | Remove stale worktree references         |
+
+**From worktree subfolder only:**
+
+| Command              | Description                              |
+| -------------------- | ---------------------------------------- |
+| `wt base`            | Jump back to base                        |
+| `wt rebase`          | Fetch and rebase onto main               |
+| `wt done`            | Remove worktree (keep branch), cd to base|
+
+**Anywhere:**
+
+| Command              | Description                              |
+| -------------------- | ---------------------------------------- |
 | `wt cd <branch>`     | Switch to worktree                       |
 | `wt cd`              | Interactive selection via fzf            |
-| `wt rm <branch>`     | Remove worktree and delete branch        |
 | `wt list` / `wt ls`  | List all worktrees                       |
-| `wt prune`           | Remove stale worktree references         |
+| `wt info`            | Show current branch, path, location      |
 | `wt --help` / `wt`   | Show help                                |
 
 ### Design Decisions
 
-- Path convention: `../<project>-worktrees/<branch>` (project name derived from git repo root)
+- Path convention: `../<project>-worktrees/<branch>` (project name derived from base's git repo root)
 - Auto-detect: `wt add` uses existing branch if present, creates new otherwise
-- Base branch: current HEAD
+- New branches: start from current HEAD
 - Branch naming: no prefixes enforced
 - Error handling: git errors are propagated (wt add/rm fail properly)
+- Terminology: "base" = main working directory, "worktree" = created via `wt add`
+- Guards: `wt add` and `wt rm` blocked from worktree subfolders (must run from base)
 
 ### Testing
 
-22 tests using bats-core:
+32 tests using bats-core:
 
 ```bash
 brew install bats-core  # if needed
 bats tests/worktrees.bats
 ```
 
-Tests cover: add (new/existing branch), cd, rm, list, prune, help, and error cases.
+Tests cover: add, cd, rm, list, prune, base, info, rebase, done, help, and error cases.
 
 ### Key Files
 
@@ -46,6 +64,14 @@ Tests cover: add (new/existing branch), cd, rm, list, prune, help, and error cas
 ---
 
 ## Future Ideas
+
+### Nice-to-have commands
+
+- `wt diff` - Show diff against main branch
+- `wt push` - Push current branch (`git push -u origin HEAD`)
+- `wt open` - Open current worktree in IDE/editor
+
+### Other ideas
 
 - Claude command for interactive workflows (issue #, branch naming conventions)
 - Bulk cleanup command
