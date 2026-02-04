@@ -9,9 +9,9 @@
 
 | Command              | Description                              |
 | -------------------- | ---------------------------------------- |
-| `wt add <branch>`    | Create worktree at ../worktrees/branch   |
+| `wt add <branch>`    | Create worktree (new or existing branch) |
 | `wt add -s <branch>` | Create worktree and cd into it           |
-| `wt cd <branch>`     | Switch to ../worktrees/branch            |
+| `wt cd <branch>`     | Switch to worktree                       |
 | `wt cd`              | Interactive selection via fzf            |
 | `wt rm <branch>`     | Remove worktree and delete branch        |
 | `wt list` / `wt ls`  | List all worktrees                       |
@@ -22,7 +22,16 @@
 
 - Branch prefix: none (use branch name directly)
 - Base branch: current HEAD
-- Path convention: `../worktrees/$branch`
+- Path convention: `../<project>-worktrees/<branch>`
+- Auto-detect: `wt add` uses existing branch if present, creates new otherwise
+
+### Testing
+
+```bash
+bats tests/worktrees.bats
+```
+
+Requires [bats-core](https://github.com/bats-core/bats-core): `brew install bats-core`
 
 ---
 
