@@ -159,6 +159,18 @@ Git worktrees let you have multiple branches checked out simultaneously in separ
 
 **This script:** Provides a simple `sw` command that creates worktrees in a predictable location next to your base.
 
+## Releasing
+
+For maintainers, releases are automated via `scripts/release.sh`:
+
+```bash
+./scripts/release.sh --init          # First release (v0.1.0)
+./scripts/release.sh 0.2.0           # Release v0.2.0
+./scripts/release.sh --dry-run 0.2.0 # Preview first
+```
+
+This tags the repo, pushes to GitHub, and updates the [Homebrew tap](https://github.com/soumyaray/homebrew-sideways).
+
 ## License
 
 MIT
