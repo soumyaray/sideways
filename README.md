@@ -31,6 +31,8 @@ Resulting directory structure:
 
 - **Zero dependencies** — pure shell (~230 lines), optional fzf for interactive selection
 - **Workflow commands** — `sw rebase <branch>` (sync with any branch), `sw done` (cleanup and return to base)
+- **Editor integration** — `sw open` launches your editor directly in a worktree
+- **Gitignored file handling** — `.swcopy`/`.swsymlink` to copy or symlink env files and local configs to new worktrees
 - **Safety guards** — blocks `rm`/`done` if uncommitted changes exist, blocks `add`/`rm` from wrong directory
 
 ## Installation
