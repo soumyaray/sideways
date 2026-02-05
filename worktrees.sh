@@ -311,7 +311,7 @@ _sw_cmd_list() {
                         dirty=""
                     fi
 
-                    printf "%s %s\t%s\t%s%s\n" "$marker" "$wt_commit" "$location" "$wt_branch" "${dirty:+ $dirty}"
+                    printf "%s %s %-8s %s%s\n" "$marker" "$wt_commit" "$location" "$wt_branch" "${dirty:+ $dirty}"
                 fi
                 wt_path="" wt_commit="" wt_branch=""
                 ;;
