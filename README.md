@@ -26,7 +26,7 @@ Resulting directory structure:
 ~/code/
   myapp/                    # base (your main checkout)
   myapp-worktrees/
-    pr-review/              # worktree (on pr-review branch)
+    fix-issue/              # worktree (on fix-issue branch)
 ```
 
 ### Why this over [other worktree tools](https://github.com/topics/git-worktree)?
