@@ -2,7 +2,9 @@
 
 A shell function (`sw`) for managing git [worktrees](#background) with sensible defaults.
 
-## Quick Example
+## Overview
+
+### Quick Example
 
 ```bash
 # You're in ~/code/myapp (base, on main branch) and need to fix an issue
@@ -27,7 +29,7 @@ Resulting directory structure:
     pr-review/              # worktree (on pr-review branch)
 ```
 
-**Why this over [other worktree tools](https://github.com/topics/git-worktree)?**
+### Why this over [other worktree tools](https://github.com/topics/git-worktree)?
 
 - **Zero dependencies** — pure shell (~230 lines), optional fzf for interactive selection
 - **Workflow commands** — `sw rebase <branch>` (sync with any branch), `sw done` (cleanup and return to base)
