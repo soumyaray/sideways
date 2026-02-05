@@ -10,7 +10,6 @@ Future features, refactoring opportunities, and ideas for the project.
 |---------|-------------|------------|
 | `sw diff` | Show diff against main branch | Low |
 | `sw push` | Push current branch (`git push -u origin HEAD`) | Low |
-| `sw open` | Open current worktree in IDE/editor | Medium |
 | `sw status` | Quick status across all worktrees | Medium |
 
 ### Other Feature Ideas
@@ -83,7 +82,7 @@ Future features, refactoring opportunities, and ideas for the project.
 
 #### 7. Enhanced Testing
 
-**Current state:** 58 unit tests + 11 integration tests (good coverage).
+**Current state:** 71 unit tests + 11 integration tests (good coverage).
 
 **Suggested additions:**
 - Integration tests for multi-command workflows (add → modify → done)
@@ -114,6 +113,13 @@ Decisions made to avoid re-litigating in the future.
 ---
 
 ## Completed
+
+### feat-open-visual branch
+
+- [x] Add `sw open [-e <editor>] [branch]` command
+- [x] Editor resolution: `-e` flag → `$VISUAL` → `$EDITOR` → error with hint
+- [x] Works from anywhere (base or worktree)
+- [x] Branch without worktree shows helpful hint
 
 ### v0.2.0 (refactor-god-function branch)
 

@@ -28,13 +28,14 @@
 
 **Anywhere:**
 
-| Command              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `sw cd <branch>`     | Switch to worktree                       |
-| `sw cd`              | Interactive selection via fzf            |
-| `sw list` / `sw ls`  | List worktrees (* = current, [modified]) |
-| `sw info`            | Show current branch, path, location      |
-| `sw --help` / `sw`   | Show help                                |
+| Command                          | Description                              |
+| -------------------------------- | ---------------------------------------- |
+| `sw cd <branch>`                 | Switch to worktree                       |
+| `sw cd`                          | Interactive selection via fzf            |
+| `sw list` / `sw ls`              | List worktrees (* = current, [modified]) |
+| `sw info`                        | Show current branch, path, location      |
+| `sw open [-e <editor>] [branch]` | Open worktree in editor                  |
+| `sw --help` / `sw`               | Show help                                |
 
 ### Design Decisions
 
@@ -49,14 +50,14 @@
 
 ### Testing
 
-**Unit tests** (41 tests using bats-core):
+**Unit tests** (71 tests using bats-core):
 
 ```bash
 brew install bats-core  # if needed
 bats tests/worktrees.bats
 ```
 
-Tests cover: add, cd, rm, list, prune, base, info, rebase, done, help, and error cases.
+Tests cover: add, cd, rm, list, prune, base, info, rebase, done, open, help, and error cases.
 
 **Zsh integration tests** (catches zsh-specific issues like `$path` shadowing):
 
@@ -119,3 +120,9 @@ Automates the full release process: tagging, pushing, and updating the Homebrew 
 ## Future Ideas
 
 See [ROADMAP.md](ROADMAP.md) for future features, refactoring opportunities, and architectural decisions.
+
+---
+
+## Claude Code Usage Notes
+
+- **Don't use `sw` commands within Claude sessions** - VS Code (or other editors) won't follow directory changes made by `sw cd`, `sw add -s`, etc. Use git commands directly instead.

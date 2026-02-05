@@ -99,14 +99,15 @@ sw <command> [options]
 
 **Anywhere:**
 
-| Command              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `sw cd <branch>`     | Switch to worktree                       |
-| `sw cd`              | Interactive selection via fzf            |
-|                      |                                          |
-| `sw list` / `sw ls`  | List worktrees (* = current, [modified]) |
-| `sw info`            | Show current branch, path, location      |
-| `sw --help`          | Show help                                |
+| Command                        | Description                              |
+| ------------------------------ | ---------------------------------------- |
+| `sw cd <branch>`               | Switch to worktree                       |
+| `sw cd`                        | Interactive selection via fzf            |
+|                                |                                          |
+| `sw list` / `sw ls`            | List worktrees (* = current, [modified]) |
+| `sw info`                      | Show current branch, path, location      |
+| `sw open [-e <editor>] [branch]` | Open worktree in editor                |
+| `sw --help`                    | Show help                                |
 
 ## Examples
 

@@ -926,3 +926,137 @@ EOF
     [ ! -e "$WT_DIR/feature-symlink-only/.env" ]
     [ ! -e "$WT_DIR/feature-symlink-only/CLAUDE.local.md" ]
 }
+
+# ============================================================================
+# sw open
+# ============================================================================
+
+@test "sw open: opens current directory with VISUAL" {
+    export VISUAL="echo"
+    unset EDITOR
+
+    run sw open
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$TEST_DIR" ]]
+}
+
+@test "sw open: opens current directory with dot" {
+    export VISUAL="echo"
+
+    run sw open .
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$TEST_DIR" ]]
+}
+
+@test "sw open: falls back to EDITOR when VISUAL not set" {
+    unset VISUAL
+    export EDITOR="echo"
+
+    run sw open
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$TEST_DIR" ]]
+}
+
+@test "sw open: -e flag overrides VISUAL and EDITOR" {
+    export VISUAL="wrong"
+    export EDITOR="wrong"
+
+    run sw open -e echo
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$TEST_DIR" ]]
+}
+
+@test "sw open: --editor flag works" {
+    export VISUAL="wrong"
+
+    run sw open --editor echo
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$TEST_DIR" ]]
+}
+
+@test "sw open: --editor=value syntax works" {
+    export VISUAL="wrong"
+
+    run sw open --editor=echo
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$TEST_DIR" ]]
+}
+
+@test "sw open: fails without editor configured" {
+    unset VISUAL
+    unset EDITOR
+
+    run sw open
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"no editor configured"* ]]
+    [[ "$output" == *"VISUAL"* ]]
+    [[ "$output" == *"EDITOR"* ]]
+}
+
+@test "sw open: opens specific worktree from base" {
+    sw add feature-open
+    export VISUAL="echo"
+
+    run sw open feature-open
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$WT_DIR/feature-open" ]]
+}
+
+@test "sw open: opens base branch from worktree" {
+    sw add -s feature-open-base
+    # Now in worktree
+    export VISUAL="echo"
+
+    run sw open main
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$TEST_DIR" ]]
+}
+
+@test "sw open: opens another worktree from worktree" {
+    sw add feature-one
+    sw add -s feature-two
+    # Now in feature-two
+    export VISUAL="echo"
+
+    run sw open feature-one
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$WT_DIR/feature-one" ]]
+}
+
+@test "sw open: branch without worktree shows hint" {
+    # Create a branch without a worktree
+    git branch feature-no-wt
+
+    export VISUAL="echo"
+    run sw open feature-no-wt
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"is a branch but has no worktree"* ]]
+    [[ "$output" == *"sw add feature-no-wt && sw open feature-no-wt"* ]]
+}
+
+@test "sw open: nonexistent branch fails" {
+    export VISUAL="echo"
+    run sw open nonexistent-branch
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"not found"* ]]
+}
+
+@test "sw open: rejects unknown options" {
+    export VISUAL="echo"
+    run sw open --unknown
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Unknown option"* ]]
+}

@@ -27,6 +27,20 @@ _sw_is_in_base() {
     [[ "$1" == "$2" ]]
 }
 
+# Choose editor based on flag, then $VISUAL, then $EDITOR
+# Args: $1 = editor from flag (optional)
+# Returns: editor command or empty string
+_sw_choose_editor() {
+    local flag_editor="$1"
+    if [[ -n "$flag_editor" ]]; then
+        echo "$flag_editor"
+    elif [[ -n "$VISUAL" ]]; then
+        echo "$VISUAL"
+    elif [[ -n "$EDITOR" ]]; then
+        echo "$EDITOR"
+    fi
+}
+
 # Guard: ensure command is run from base directory
 # Args: $1 = repo_root, $2 = base_dir, $3 = command name, $4+ = original args
 _sw_guard_base_dir() {
@@ -400,6 +414,63 @@ _sw_cmd_done() {
     echo "Branch preserved. Now in base directory: $done_base_dir"
 }
 
+# sw open: Open worktree in editor
+# Args: $1=base_dir, $2=worktrees_dir_abs, $3+=command args
+_sw_cmd_open() {
+    local base_dir="$1" worktrees_dir_abs="$2"
+    shift 2
+
+    # Parse options
+    local editor_flag=""
+    while [[ "$1" == -* ]]; do
+        case "$1" in
+            -e) editor_flag="$2"; shift 2 ;;
+            --editor) editor_flag="$2"; shift 2 ;;
+            --editor=*) editor_flag="${1#--editor=}"; shift ;;
+            *) _sw_error "Unknown option: $1"; return 1 ;;
+        esac
+    done
+
+    local target="$1"
+    local target_dir
+
+    # Resolve target directory
+    if [[ -z "$target" || "$target" == "." ]]; then
+        # Current directory
+        target_dir=$(git rev-parse --show-toplevel)
+    else
+        # First check if it matches the base branch
+        local base_branch
+        base_branch=$(git -C "$base_dir" branch --show-current 2>/dev/null)
+        if [[ "$target" == "$base_branch" ]]; then
+            target_dir="$base_dir"
+        elif [[ -d "$worktrees_dir_abs/$target" ]]; then
+            # Worktree exists
+            target_dir="$worktrees_dir_abs/$target"
+        elif git show-ref --verify --quiet "refs/heads/$target"; then
+            # Branch exists but no worktree
+            _sw_error "'$target' is a branch but has no worktree"
+            echo "Hint: sw add $target && sw open $target" >&2
+            return 1
+        else
+            _sw_error "worktree '$target' not found"
+            return 1
+        fi
+    fi
+
+    # Get editor
+    local editor
+    editor=$(_sw_choose_editor "$editor_flag")
+    if [[ -z "$editor" ]]; then
+        _sw_error "no editor configured"
+        echo "Set \$VISUAL or \$EDITOR, or use: sw open -e <editor>" >&2
+        return 1
+    fi
+
+    # Open directory
+    "$editor" "$target_dir"
+}
+
 # sw help: Show help message
 _sw_cmd_help() {
     cat <<'EOF'
@@ -426,6 +497,7 @@ Anywhere:
   cd [branch]                  Switch to worktree (or interactive via fzf)
   list, ls                     List all worktrees
   info                         Show current branch, path, location
+  open [-e <editor>] [branch]  Open worktree in editor ($VISUAL, $EDITOR, or -e)
   --help, -h                   Show this help message
 
 Config files:
@@ -470,6 +542,7 @@ sw() {
         info)     _sw_cmd_info ;;
         rebase)   _sw_cmd_rebase "$@" ;;
         done)     _sw_cmd_done ;;
+        open)     _sw_cmd_open "$base_dir" "$worktrees_dir_abs" "$@" ;;
         help|-h|--help|"")
                   _sw_cmd_help ;;
         *)
