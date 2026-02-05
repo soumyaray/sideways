@@ -173,9 +173,12 @@ _sw_cmd_add() {
     _sw_guard_base_dir "$repo_root" "$base_dir" "add" "$@" || return 1
 
     local switch=false
+    local open_after=false
     while [[ "$1" == -* ]]; do
         case "$1" in
             -s|--switch) switch=true; shift ;;
+            -o|--open) open_after=true; shift ;;
+            -so|-os) switch=true; open_after=true; shift ;;
             *) _sw_error "Unknown option: $1"; return 1 ;;
         esac
     done
@@ -207,6 +210,16 @@ _sw_cmd_add() {
 
     if $switch; then
         cd "$wt_path"
+    fi
+
+    if $open_after; then
+        local editor
+        editor=$(_sw_choose_editor "")
+        if [[ -z "$editor" ]]; then
+            echo "Warning: cannot open - no editor configured (\$VISUAL or \$EDITOR)" >&2
+        else
+            "$editor" "$wt_abs_path"
+        fi
     fi
 }
 
@@ -481,10 +494,11 @@ Sideways - Git Worktree Helper
 Usage: sw <command> [options]
 
 From base directory only:
-  add [-s|--switch] <branch>   Create worktree at ../<project>-worktrees/<branch>
+  add [-s] [-o] <branch>       Create worktree at ../<project>-worktrees/<branch>
                                Uses existing branch or creates new one
                                -s, --switch: cd into worktree after creation
-                               Copies gitignored files (see .swignore)
+                               -o, --open: open worktree in editor
+                               Copies gitignored files (see .swcopy)
   rm [-d|-D] <branch>          Remove worktree (branch kept by default)
                                -d: also delete branch (if merged)
                                -D: also delete branch (force)

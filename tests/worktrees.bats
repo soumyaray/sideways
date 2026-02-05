@@ -103,6 +103,52 @@ teardown() {
     [ -d "$WT_DIR/feature-two" ]
 }
 
+@test "sw add -o: creates worktree and opens in editor" {
+    export VISUAL="echo"
+
+    run sw add -o feature-open
+
+    [ "$status" -eq 0 ]
+    [ -d "$WT_DIR/feature-open" ]
+    # Editor (echo) should output the worktree path
+    [[ "$output" == *"$WT_DIR/feature-open"* ]]
+}
+
+@test "sw add -so: creates, switches, and opens" {
+    export VISUAL="echo"
+
+    sw add -so feature-combo
+
+    # Should be in the worktree
+    [[ "$PWD" == *"-worktrees/feature-combo" ]]
+    # Worktree should exist
+    [ -d "$WT_DIR/feature-combo" ]
+}
+
+@test "sw add -o: warns but succeeds when no editor configured" {
+    unset VISUAL
+    unset EDITOR
+
+    run sw add -o feature-no-editor
+
+    [ "$status" -eq 0 ]
+    # Worktree should still be created
+    [ -d "$WT_DIR/feature-no-editor" ]
+    # Should warn about no editor
+    [[ "$output" == *"Warning: cannot open"* ]]
+    [[ "$output" == *"no editor configured"* ]]
+}
+
+@test "sw add -o: fails from inside a worktree" {
+    sw add -s feature-nested
+    export VISUAL="echo"
+
+    run sw add -o another-branch
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"must be run from base directory"* ]]
+}
+
 # ============================================================================
 # sw cd
 # ============================================================================

@@ -85,6 +85,7 @@ sw <command> [options]
 | --------------------- | -------------------------------------------------- |
 | `sw add <branch>`     | Create worktree, copy gitignored files (see below) |
 | `sw add -s <branch>`  | Create worktree and cd into it                     |
+| `sw add -o <branch>`  | Create worktree and open in editor                 |
 |                       |                                             |
 | `sw rm <branch>`      | Remove worktree (keep branch)               |
 | `sw rm -d <branch>`   | Remove worktree + delete branch (if merged) |
