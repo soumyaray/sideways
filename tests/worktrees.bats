@@ -365,6 +365,20 @@ teardown() {
     [[ "$output" == *"Sideways - Git Worktree Helper"* ]]
 }
 
+@test "sw --version: shows version" {
+    run sw --version
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "sideways "* ]]
+}
+
+@test "sw -V: short version flag works" {
+    run sw -V
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "sideways "* ]]
+}
+
 # ============================================================================
 # Error handling
 # ============================================================================

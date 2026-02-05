@@ -1,41 +1,17 @@
-# Sideways - Git Worktree Shortcuts
+# Sideways - Git Worktree Helper
 
-## Shell Function: sw
+A shell function (`sw`) for managing git worktrees. See `sw --help` or `README.md` for usage.
 
-**Source:** `worktrees.sh` (add to `~/.zshrc`)
-**Status:** Complete
+## Architecture
 
-### Usage Summary
+`worktrees.sh` is organized in three layers:
 
-**From base directory only:**
+- **Model** (`_sw_*` functions) - core logic: path resolution, state queries, guards
+- **View** (`_sw_error`, output in commands) - user-facing output
+- **Controller** (`_sw_cmd_*` functions) - command handlers
+- **Router** (`sw()` function) - parses args, computes paths, dispatches to controllers
 
-| Command               | Description                                        |
-| --------------------- | -------------------------------------------------- |
-| `sw add <branch>`     | Create worktree, copy gitignored files             |
-| `sw add -s <branch>`  | Create worktree and cd into it                     |
-| `sw rm <branch>`      | Remove worktree (keep branch)                      |
-| `sw rm -d <branch>`   | Remove worktree + delete branch (if merged)        |
-| `sw rm -D <branch>`   | Remove worktree + force delete branch              |
-| `sw prune`            | Remove stale worktree references                   |
-
-**From worktree subdirectory only:**
-
-| Command              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `sw base`            | Jump back to base                        |
-| `sw rebase <branch>` | Fetch and rebase onto origin/\<branch\>  |
-| `sw done`            | Remove worktree (keep branch), cd to base|
-
-**Anywhere:**
-
-| Command                          | Description                              |
-| -------------------------------- | ---------------------------------------- |
-| `sw cd <branch>`                 | Switch to worktree                       |
-| `sw cd`                          | Interactive selection via fzf            |
-| `sw list` / `sw ls`              | List worktrees (* = current, [modified]) |
-| `sw info`                        | Show current branch, path, location      |
-| `sw open [-e <editor>] [branch]` | Open worktree in editor                  |
-| `sw --help` / `sw`               | Show help                                |
+`SW_VERSION` at the top of the file is auto-updated by `scripts/release.sh` — don't edit manually.
 
 ### Design Decisions
 
@@ -48,9 +24,11 @@
 - Guards: `sw add` and `sw rm` blocked from worktree subdirectories (must run from base)
 - Safety: `sw rm` and `sw done` refuse to remove worktrees with uncommitted changes
 
-### Testing
+---
 
-**Unit tests** (71 tests using bats-core):
+## Testing
+
+**Unit tests** (73 tests using bats-core):
 
 ```bash
 brew install bats-core  # if needed
@@ -67,7 +45,9 @@ zsh tests/zsh-integration.zsh
 
 These tests run in actual zsh and catch issues that bash-based bats tests miss.
 
-### Key Files
+---
+
+## Key Files
 
 - `worktrees.sh` - the shell function
 - `tests/worktrees.bats` - test suite
@@ -78,51 +58,48 @@ These tests run in actual zsh and catch issues that bash-based bats tests miss.
 
 ---
 
-## Release Script
+## Releasing
 
-**Source:** `scripts/release.sh`
+### Pre-release Checklist
 
-Automates the full release process: tagging, pushing, and updating the Homebrew formula.
+1. All changes committed and pushed to `main`
+2. Tests pass: `bats tests/worktrees.bats` and `zsh tests/zsh-integration.zsh`
+3. `../homebrew-sideways` repo exists and is on `main`
 
-### Usage
+### Release Process
 
 ```bash
-./scripts/release.sh [--dry-run] <version>
-./scripts/release.sh --init [version]
+# Preview first
+./scripts/release.sh --dry-run 0.4.0
 
-# Examples:
-./scripts/release.sh --init              # First release (v0.1.0)
-./scripts/release.sh 0.2.0               # Release v0.2.0
-./scripts/release.sh --dry-run 0.2.0     # Preview without making changes
+# Then release
+./scripts/release.sh 0.4.0
 ```
 
-- `--init` creates the first release (defaults to 0.1.0), warns if tags already exist
-- `--dry-run` shows what would happen without making changes
+The script handles everything:
 
-### What it does
+1. Updates `SW_VERSION` in `worktrees.sh`
+2. Commits the version bump
+3. Creates and pushes git tag `v0.4.0`
+4. Calculates SHA256 from GitHub tarball
+5. Updates `../homebrew-sideways/Formula/sideways.rb`
+6. Commits and pushes the formula
 
-1. Validates version format (X.Y.Z) and checks tag doesn't exist
-2. Runs pre-flight checks (clean working dir, on main branch, homebrew-sideways repo exists)
-3. Creates and pushes annotated git tag
-4. Fetches tarball from GitHub and calculates SHA256
-5. Updates `../homebrew-sideways/Formula/sideways.rb` with new version and SHA
-6. Commits and pushes the formula update
+### Post-release Verification
 
-### Requirements
-
-- Must run from repo root
-- Working directory must be clean
-- Must be on main branch
-- `../homebrew-sideways` repo must exist with `Formula/sideways.rb`
+```bash
+brew update && brew upgrade sideways
+sw --version  # should show new version
+```
 
 ---
 
 ## Future Ideas
 
-See [ROADMAP.md](ROADMAP.md) for future features, refactoring opportunities, and architectural decisions.
+See [ROADMAP.md](ROADMAP.md) for planned features and refactoring opportunities.
 
 ---
 
-## Claude Code Usage Notes
+## Caveats
 
-- **Don't use `sw` commands within Claude sessions** - VS Code (or other editors) won't follow directory changes made by `sw cd`, `sw add -s`, etc. Use git commands directly instead.
+- **Don't use `sw` commands in Claude sessions** — editors won't follow directory changes from `sw cd`, `sw add -s`, etc. Use git commands directly.

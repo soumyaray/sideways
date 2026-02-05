@@ -5,6 +5,8 @@
 #   # Sideways - git worktree helper
 #   source ~/path/to/worktrees.sh
 
+SW_VERSION="0.3.0"
+
 # =============================================================================
 # MODEL LAYER - Core business logic and state queries
 # =============================================================================
@@ -499,6 +501,7 @@ Anywhere:
   info                         Show current branch, path, location
   open [-e <editor>] [branch]  Open worktree in editor ($VISUAL, $EDITOR, or -e)
   --help, -h                   Show this help message
+  --version, -V                Show version
 
 Config files:
   .swcopy                      Patterns for gitignored files to copy
@@ -545,6 +548,8 @@ sw() {
         open)     _sw_cmd_open "$base_dir" "$worktrees_dir_abs" "$@" ;;
         help|-h|--help|"")
                   _sw_cmd_help ;;
+        -V|--version)
+                  echo "sideways $SW_VERSION" ;;
         *)
             echo "Unknown command: $cmd" >&2
             echo "Run 'sw help' for usage" >&2

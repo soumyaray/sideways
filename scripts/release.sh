@@ -171,6 +171,27 @@ info "Pre-flight checks passed"
 info ""
 
 # ------------------------------------------------------------------------------
+# Update Version in worktrees.sh
+# ------------------------------------------------------------------------------
+
+if $DRY_RUN; then
+    dry_run "Would update SW_VERSION to \"$VERSION\" in worktrees.sh"
+    dry_run "Would commit: git commit -m \"Bump version to $VERSION\""
+else
+    info "Updating SW_VERSION in worktrees.sh..."
+    sed -i '' "s/^SW_VERSION=\"[^\"]*\"/SW_VERSION=\"$VERSION\"/" worktrees.sh
+    success "Updated SW_VERSION to $VERSION"
+
+    git add worktrees.sh
+    git commit -m "Bump version to $VERSION"
+    success "Committed version bump"
+
+    info "Pushing to origin..."
+    git push origin main
+    success "Pushed version bump"
+fi
+
+# ------------------------------------------------------------------------------
 # Create and Push Tag
 # ------------------------------------------------------------------------------
 

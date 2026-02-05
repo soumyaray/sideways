@@ -112,6 +112,7 @@ sw <command> [options]
 | `sw info`                      | Show current branch, path, location      |
 | `sw open [-e <editor>] [branch]` | Open worktree in editor                |
 | `sw --help`                    | Show help                                |
+| `sw --version`                 | Show version                             |
 
 ## Examples
 
