@@ -289,10 +289,10 @@ teardown() {
 
     run sw list
 
-    # Current worktree should have asterisk marker
-    [[ "$output" == *"* feature-current"* ]]
-    # Base should not have asterisk (space instead)
-    [[ "$output" == *"  main"* ]]
+    # Current worktree should have asterisk marker (* <space> commit <tab> location <tab> branch)
+    [[ "$output" == *"* "*"feature-current"* ]]
+    # Base should not have asterisk (space instead, so two spaces before commit)
+    [[ "$output" == *"  "*"main"* ]]
 }
 
 @test "sw list: shows modified status" {
