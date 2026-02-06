@@ -829,6 +829,168 @@ EOF
 }
 
 # ============================================================================
+# sw add: .swcopy nested patterns
+# ============================================================================
+
+@test "sw add: .swcopy nested glob pattern copies matching files" {
+    # Create nested structure with gitignored files
+    mkdir -p backend_app/db/store
+    echo "data1" > backend_app/db/store/test.db
+    echo "data2" > backend_app/db/store/cache.db
+    echo "not a db" > backend_app/db/store/readme.txt
+    cat > .gitignore <<'EOF'
+backend_app/db/store/*.db
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "backend_app/db/store/*.db" > .swcopy
+
+    run sw add feature-nested-glob
+
+    [ "$status" -eq 0 ]
+    # Matching .db files should be copied
+    [ -f "$WT_DIR/feature-nested-glob/backend_app/db/store/test.db" ]
+    [ -f "$WT_DIR/feature-nested-glob/backend_app/db/store/cache.db" ]
+    # Non-matching file should NOT be copied
+    [ ! -f "$WT_DIR/feature-nested-glob/backend_app/db/store/readme.txt" ]
+}
+
+@test "sw add: .swcopy nested directory pattern copies entire directory" {
+    mkdir -p backend_app/config
+    echo "setting1" > backend_app/config/app.yml
+    echo "setting2" > backend_app/config/db.yml
+    cat > .gitignore <<'EOF'
+backend_app/config/
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "backend_app/config/" > .swcopy
+
+    run sw add feature-nested-dir
+
+    [ "$status" -eq 0 ]
+    # Directory should be copied with correct nesting
+    [ -d "$WT_DIR/feature-nested-dir/backend_app/config" ]
+    [ -f "$WT_DIR/feature-nested-dir/backend_app/config/app.yml" ]
+    [ -f "$WT_DIR/feature-nested-dir/backend_app/config/db.yml" ]
+}
+
+@test "sw add: .swcopy deeply nested path works" {
+    mkdir -p a/b/c/d
+    echo "deep" > a/b/c/d/file.txt
+    cat > .gitignore <<'EOF'
+a/b/c/d/file.txt
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "a/b/c/d/file.txt" > .swcopy
+
+    run sw add feature-deep-nest
+
+    [ "$status" -eq 0 ]
+    [ -f "$WT_DIR/feature-deep-nest/a/b/c/d/file.txt" ]
+    [[ "$(cat "$WT_DIR/feature-deep-nest/a/b/c/d/file.txt")" == "deep" ]]
+}
+
+@test "sw add: .swcopy mixed top-level and nested patterns" {
+    echo "SECRET=abc" > .env
+    mkdir -p logs
+    echo "log1" > logs/app.log
+    mkdir -p backend_app/db/store
+    echo "data" > backend_app/db/store/test.db
+    cat > .gitignore <<'EOF'
+.env
+logs/
+backend_app/db/store/*.db
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    cat > .swcopy <<'EOF'
+.env
+logs/
+backend_app/db/store/*.db
+EOF
+
+    run sw add feature-mixed
+
+    [ "$status" -eq 0 ]
+    # Top-level file
+    [ -f "$WT_DIR/feature-mixed/.env" ]
+    # Top-level directory
+    [ -d "$WT_DIR/feature-mixed/logs" ]
+    [ -f "$WT_DIR/feature-mixed/logs/app.log" ]
+    # Nested glob
+    [ -f "$WT_DIR/feature-mixed/backend_app/db/store/test.db" ]
+}
+
+@test "sw add: .swcopy nested pattern with no matches is graceful" {
+    cat > .gitignore <<'EOF'
+*.db
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Pattern that matches nothing (no .db files exist)
+    echo "nonexistent/path/*.db" > .swcopy
+
+    run sw add feature-no-match
+
+    [ "$status" -eq 0 ]
+    # Worktree should still be created successfully
+    [ -d "$WT_DIR/feature-no-match" ]
+}
+
+@test "sw add: .swcopy duplicate patterns only copy once" {
+    echo "SECRET=abc" > .env
+    cat > .gitignore <<'EOF'
+.env
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # .env matches both patterns
+    cat > .swcopy <<'EOF'
+.env
+.e*
+EOF
+
+    run sw add feature-dedup
+
+    [ "$status" -eq 0 ]
+    [ -f "$WT_DIR/feature-dedup/.env" ]
+    # Output should mention .env only once
+    local count
+    count=$(echo "$output" | grep -o '\.env' | wc -l)
+    [ "$count" -eq 1 ]
+}
+
+@test "sw add: .swcopy nested dir where only contents are gitignored" {
+    # Directory itself is NOT in gitignore, but files inside it are
+    mkdir -p backend_app/db/store
+    echo "data" > backend_app/db/store/test.db
+    echo "tracked" > backend_app/db/store/schema.sql
+    cat > .gitignore <<'EOF'
+*.db
+EOF
+    git add .gitignore backend_app/db/store/schema.sql
+    git commit -m "Add files"
+
+    # Directory pattern — should still work because contents are gitignored
+    echo "backend_app/db/store/" > .swcopy
+
+    run sw add feature-contents-ignored
+
+    [ "$status" -eq 0 ]
+    # The gitignored .db file should be copied (not just the tracked schema.sql)
+    [ -f "$WT_DIR/feature-contents-ignored/backend_app/db/store/test.db" ]
+    [[ "$(cat "$WT_DIR/feature-contents-ignored/backend_app/db/store/test.db")" == "data" ]]
+}
+
+# ============================================================================
 # sw add: .swsymlink support
 # ============================================================================
 
@@ -985,6 +1147,78 @@ EOF
     # Nothing should exist (no .swcopy)
     [ ! -e "$WT_DIR/feature-symlink-only/.env" ]
     [ ! -e "$WT_DIR/feature-symlink-only/CLAUDE.local.md" ]
+}
+
+# ============================================================================
+# sw add: nested .swsymlink patterns
+# ============================================================================
+
+@test "sw add: .swsymlink nested directory pattern" {
+    mkdir -p backend_app/config
+    echo "setting1" > backend_app/config/app.yml
+    cat > .gitignore <<'EOF'
+backend_app/config/
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "backend_app/config/" > .swcopy
+    echo "backend_app/config/" > .swsymlink
+
+    run sw add feature-nested-symdir
+
+    [ "$status" -eq 0 ]
+    # Should be a symlink, not a copy
+    [ -L "$WT_DIR/feature-nested-symdir/backend_app/config" ]
+    # Files inside should be accessible
+    [ -f "$WT_DIR/feature-nested-symdir/backend_app/config/app.yml" ]
+}
+
+@test "sw add: .swsymlink nested file pattern" {
+    mkdir -p backend_app/config
+    echo "local settings" > backend_app/config/local.yml
+    echo "other" > backend_app/config/app.yml
+    cat > .gitignore <<'EOF'
+backend_app/config/local.yml
+backend_app/config/app.yml
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Copy both, symlink only local.yml
+    echo "backend_app/config/*.yml" > .swcopy
+    echo "backend_app/config/local.yml" > .swsymlink
+
+    run sw add feature-nested-symfile
+
+    [ "$status" -eq 0 ]
+    # local.yml should be a symlink
+    [ -L "$WT_DIR/feature-nested-symfile/backend_app/config/local.yml" ]
+    # app.yml should be a regular copy
+    [ -f "$WT_DIR/feature-nested-symfile/backend_app/config/app.yml" ]
+    [ ! -L "$WT_DIR/feature-nested-symfile/backend_app/config/app.yml" ]
+}
+
+@test "sw add: nested cp destination preserves full path" {
+    # Regression test: cp -R should create backend_app/config/, not just config/
+    mkdir -p backend_app/config
+    echo "setting" > backend_app/config/app.yml
+    cat > .gitignore <<'EOF'
+backend_app/config/
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "backend_app/config/" > .swcopy
+
+    run sw add feature-cp-path
+
+    [ "$status" -eq 0 ]
+    # Full nested path must be preserved
+    [ -d "$WT_DIR/feature-cp-path/backend_app/config" ]
+    [ -f "$WT_DIR/feature-cp-path/backend_app/config/app.yml" ]
+    # Must NOT appear at top level
+    [ ! -d "$WT_DIR/feature-cp-path/config" ] || [ -d "$WT_DIR/feature-cp-path/backend_app/config" ]
 }
 
 # ============================================================================

@@ -55,6 +55,30 @@ _sw_guard_base_dir() {
     fi
 }
 
+# Read patterns from a file, filtering comments and blank lines
+# Output: one pattern per line
+_sw_read_patterns() {
+    local file="$1"
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// }" ]] && continue
+        printf '%s\n' "$line"
+    done < "$file"
+}
+
+# Check if an item matches any symlink pattern
+# Args: $1 = item path, remaining args = symlink patterns
+# Returns: 0 if should symlink, 1 otherwise
+_sw_should_symlink() {
+    local item="${1%/}"
+    shift
+    local p
+    for p in "$@"; do
+        [[ "$item" == ${p%/} ]] && return 0
+    done
+    return 1
+}
+
 # Copy gitignored files from base to new worktree
 # Args: $1 = base_dir, $2 = worktree_path
 _sw_copy_gitignored() {
@@ -68,76 +92,115 @@ _sw_copy_gitignored() {
     # If no .swcopy file, don't copy anything
     [[ ! -f "$swcopy_file" ]] && return 0
 
-    # Get list of gitignored files (top-level entries only)
-    local gitignored_items=()
-    local item
-    while IFS= read -r item; do
-        [[ -n "$item" ]] && gitignored_items+=("$item")
-    done < <(git -C "$base_dir" ls-files --others --ignored --exclude-standard 2>/dev/null | cut -d'/' -f1 | sort -u)
-
     # Load .swcopy patterns
     local swcopy_patterns=()
-    while IFS= read -r line; do
-        # Skip comments and blank lines
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "${line// }" ]] && continue
-        swcopy_patterns+=("$line")
-    done < "$swcopy_file"
+    local p
+    while IFS= read -r p; do
+        swcopy_patterns+=("$p")
+    done < <(_sw_read_patterns "$swcopy_file")
 
     # Load .swsymlink patterns if file exists
     local swsymlink_patterns=()
     if [[ -f "$swsymlink_file" ]]; then
-        while IFS= read -r line; do
-            # Skip comments and blank lines
-            [[ "$line" =~ ^[[:space:]]*# ]] && continue
-            [[ -z "${line// }" ]] && continue
-            swsymlink_patterns+=("$line")
-        done < "$swsymlink_file"
+        while IFS= read -r p; do
+            swsymlink_patterns+=("$p")
+        done < <(_sw_read_patterns "$swsymlink_file")
     fi
 
-    # Process each gitignored item
-    for item in "${gitignored_items[@]}"; do
-        local should_copy=false
-        local should_symlink=false
-        local src="$base_dir/$item"
+    # Change to base directory so glob expansion works on correct paths
+    local original_dir="$PWD"
+    cd "$base_dir" || return 1
 
-        # Check against .swcopy patterns (must match to be included)
-        for pattern in "${swcopy_patterns[@]}"; do
-            local match_pattern="${pattern%/}"
-            local match_item="${item%/}"
-            if [[ "$match_item" == $match_pattern ]]; then
-                should_copy=true
-                break
+    # Enable shell options for proper glob behavior (portable bash/zsh)
+    if [[ -n "$BASH_VERSION" ]]; then
+        local original_nullglob=$(shopt -p nullglob)
+        local original_dotglob=$(shopt -p dotglob)
+        shopt -s nullglob dotglob
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        local had_nullglob=false had_dotglob=false
+        [[ -o nullglob ]] && had_nullglob=true
+        [[ -o globdots ]] && had_dotglob=true
+        setopt NULL_GLOB GLOB_DOTS
+    fi
+
+    # Track processed items to avoid duplicates across overlapping patterns
+    local processed=""
+
+    local pattern
+    for pattern in "${swcopy_patterns[@]}"; do
+        if [[ "$pattern" == */ ]]; then
+            # Directory pattern (e.g., "logs/", "backend_app/config/")
+            local dir="${pattern%/}"
+
+            # Skip if already processed
+            case "$processed" in *"|$dir/|"*) continue ;; esac
+
+            # Verify directory exists and is gitignored (or contains gitignored files)
+            if [[ -d "$dir" ]] && \
+               { git check-ignore -q "$dir" 2>/dev/null || \
+                 [[ -n "$(git ls-files --others --ignored --exclude-standard "$dir" 2>/dev/null | head -1)" ]]; }; then
+
+                processed="$processed|$dir/|"
+
+                # Create parent directories for nested paths
+                mkdir -p "$(dirname "$wt_path/$dir")"
+
+                if _sw_should_symlink "$dir" "${swsymlink_patterns[@]}"; then
+                    ln -s "$base_dir/$dir" "$wt_path/$dir" 2>/dev/null && symlinked+=("$dir/")
+                elif [[ -d "$wt_path/$dir" ]]; then
+                    # Target exists (e.g., git created it for tracked files) — merge contents
+                    cp -R "$dir/." "$wt_path/$dir/" 2>/dev/null && copied+=("$dir/")
+                else
+                    cp -R "$dir" "$wt_path/$dir" 2>/dev/null && copied+=("$dir/")
+                fi
             fi
-        done
+        else
+            # File pattern with potential wildcards (e.g., "logs/*.txt", ".env")
+            local expanded_files=()
+            local f
+            for f in $pattern; do
+                [[ -f "$f" ]] && expanded_files+=("$f")
+            done
 
-        # Skip if not in .swcopy
-        $should_copy || continue
+            # Skip if no files matched
+            [[ ${#expanded_files[@]} -eq 0 ]] && continue
 
-        # Check against .swsymlink patterns
-        for pattern in "${swsymlink_patterns[@]}"; do
-            local match_pattern="${pattern%/}"
-            local match_item="${item%/}"
-            if [[ "$match_item" == $match_pattern ]]; then
-                should_symlink=true
-                break
-            fi
-        done
+            # Batch-verify which files are gitignored (single git subprocess)
+            local gitignored_files
+            gitignored_files=$(printf '%s\n' "${expanded_files[@]}" | git check-ignore --stdin 2>/dev/null)
 
-        if [[ -e "$src" ]]; then
-            if $should_symlink; then
-                # Create symlink (use absolute path for reliability)
-                ln -s "$src" "$wt_path/$item" 2>/dev/null && symlinked+=("$item")
-            elif [[ -d "$src" ]]; then
-                cp -R "$src" "$wt_path/" 2>/dev/null && copied+=("$item/")
-            else
-                # Ensure parent directory exists for nested files
-                local parent_dir=$(dirname "$wt_path/$item")
-                [[ ! -d "$parent_dir" ]] && mkdir -p "$parent_dir"
-                cp "$src" "$wt_path/$item" 2>/dev/null && copied+=("$item")
-            fi
+            # Process each gitignored file
+            local file
+            while IFS= read -r file; do
+                [[ -z "$file" ]] && continue
+
+                # Skip if already processed (deduplication)
+                case "$processed" in *"|$file|"*) continue ;; esac
+                processed="$processed|$file|"
+
+                # Create parent directories for nested paths
+                mkdir -p "$(dirname "$wt_path/$file")"
+
+                if _sw_should_symlink "$file" "${swsymlink_patterns[@]}"; then
+                    ln -s "$base_dir/$file" "$wt_path/$file" 2>/dev/null && symlinked+=("$file")
+                else
+                    cp "$file" "$wt_path/$file" 2>/dev/null && copied+=("$file")
+                fi
+            done <<< "$gitignored_files"
         fi
     done
+
+    # Restore shell options
+    if [[ -n "$BASH_VERSION" ]]; then
+        $original_nullglob
+        $original_dotglob
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        $had_nullglob || unsetopt NULL_GLOB
+        $had_dotglob || unsetopt GLOB_DOTS
+    fi
+
+    # Restore original directory
+    cd "$original_dir" || true
 
     # Output copied items
     if [[ ${#copied[@]} -gt 0 ]]; then
