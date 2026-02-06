@@ -158,7 +158,7 @@ Example with multiple projects:
 
 ## Copying Gitignored Files
 
-When you create a worktree with `sw add`, gitignored files can be copied from base to the new worktree. By default, nothing is copied — you opt-in via `.swcopy`.
+When you create a worktree with `sw add`, gitignored files can be copied or symlinked from base to the new worktree. You opt-in via `.swcopy` and/or `.swsymlink` — each works independently.
 
 ### Specifying files to copy with `.swcopy`
 
@@ -179,7 +179,7 @@ sw add feature-auth
 # Copied: .env CLAUDE.local.md logs/ backend_app/db/store/cache.db
 ```
 
-If no `.swcopy` exists, no gitignored files are copied.
+If no `.swcopy` exists, no gitignored files are copied (symlinks from `.swsymlink` still work independently).
 
 ### Symlinking files with `.swsymlink`
 
@@ -190,7 +190,7 @@ For files you want shared across all worktrees (changes reflected everywhere), c
 CLAUDE.local.md
 ```
 
-Files in both `.swcopy` and `.swsymlink` are symlinked to the base copy; others in `.swcopy` are copied. This is useful for config files that should stay in sync, while `.env` files (with port numbers, etc.) remain independent copies.
+Files listed in `.swsymlink` are symlinked to the base copy (changes reflected everywhere), while files in `.swcopy` get independent copies. The same item must not appear in both files — `sw add` will error if it detects overlap.
 
 ### Config file format
 
@@ -201,7 +201,7 @@ Both `.swcopy` and `.swsymlink` use the same format:
 - Glob patterns supported (`*.log`, `CLAUDE*`, `backend_app/db/*.db`)
 - `**` for recursive matching (`**/*.sqlite` matches at any depth; requires bash 4+ or zsh)
 - Directories should have trailing `/` (`logs/`, `backend_app/config/`)
-- Files must be in `.swcopy` to be copied or symlinked
+- The same file/pattern must not appear in both `.swcopy` and `.swsymlink`
 
 ## Dependencies
 
