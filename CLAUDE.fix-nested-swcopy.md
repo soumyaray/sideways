@@ -75,9 +75,11 @@ done
 
 Ensure patterns like `.env`, `logs/`, `*.log` still work exactly as before.
 
-### 2. Pattern Matching Logic Using Direct Glob Expansion
+### 2. Pattern Matching Logic Using Hybrid Approach
 
-Use shell glob expansion to let the shell find matching files:
+**Key insight:** Directory patterns like `logs/` don't auto-expand to files - they just match the directory itself. So we should:
+- Keep fast `cp -R` for directory patterns (preserves current behavior)
+- Use glob expansion for wildcard patterns (fixes the bug)
 
 ```bash
 # Enable shell options for proper glob behavior
@@ -85,79 +87,95 @@ shopt -s nullglob  # Pattern with no matches expands to nothing
 shopt -s dotglob   # Include hidden files like .env in globs
 
 for pattern in "${swcopy_patterns[@]}"; do
-    # Handle directory patterns (with trailing slash)
     if [[ "$pattern" == */ ]]; then
-        # Expand to all files under directory
-        pattern="${pattern%/}/**/*"
-        shopt -s globstar  # Enable ** for recursive matching
-    fi
+        # Directory pattern (e.g., "logs/")
+        dir="${pattern%/}"
 
-    # Let shell expand the glob pattern
-    for file in $pattern; do
-        # Skip if it's a directory (we only copy files)
-        [[ -d "$base_dir/$file" ]] && continue
-
-        # Verify file exists and is actually gitignored
-        if [[ -f "$base_dir/$file" ]] && git check-ignore -q "$file" 2>/dev/null; then
-            # Check if should be symlinked instead of copied
+        # Verify directory exists and is gitignored
+        if [[ -d "$base_dir/$dir" ]] && git check-ignore -q "$dir" 2>/dev/null; then
+            # Check if this directory should be symlinked
             should_symlink=false
             for symlink_pattern in "${swsymlink_patterns[@]}"; do
-                # Use same glob expansion for symlink patterns
-                if [[ "$file" == $symlink_pattern ]]; then
+                if [[ "${dir}" == "${symlink_pattern%/}" ]] || [[ "${dir}/" == "${symlink_pattern%/}/" ]]; then
                     should_symlink=true
                     break
                 fi
             done
 
-            # Copy or symlink the file
             if $should_symlink; then
-                ln -s "$base_dir/$file" "$wt_path/$file"
-                symlinked+=("$file")
+                # Symlink entire directory
+                ln -s "$base_dir/$dir" "$wt_path/$dir" 2>/dev/null && symlinked+=("$dir/")
             else
-                # Ensure parent directory exists
-                mkdir -p "$(dirname "$wt_path/$file")"
-                cp "$file" "$wt_path/$file"
-                copied+=("$file")
+                # Copy entire directory (fast, preserves current behavior)
+                cp -R "$dir" "$wt_path/" 2>/dev/null && copied+=("$dir/")
             fi
         fi
-    done
+    else
+        # File pattern with potential wildcards (e.g., "logs/*.txt", ".env")
+        # Let shell expand the glob pattern
+        for file in $pattern; do
+            # Skip if it's a directory
+            [[ -d "$base_dir/$file" ]] && continue
+
+            # Verify file exists and is gitignored
+            if [[ -f "$base_dir/$file" ]] && git check-ignore -q "$file" 2>/dev/null; then
+                # Check if this file should be symlinked
+                should_symlink=false
+                for symlink_pattern in "${swsymlink_patterns[@]}"; do
+                    # Match against symlink patterns (support globs)
+                    if [[ "$file" == $symlink_pattern ]]; then
+                        should_symlink=true
+                        break
+                    fi
+                done
+
+                if $should_symlink; then
+                    # Symlink individual file
+                    mkdir -p "$(dirname "$wt_path/$file")"
+                    ln -s "$base_dir/$file" "$wt_path/$file" 2>/dev/null && symlinked+=("$file")
+                else
+                    # Copy individual file
+                    mkdir -p "$(dirname "$wt_path/$file")"
+                    cp "$file" "$wt_path/$file" 2>/dev/null && copied+=("$file")
+                fi
+            fi
+        done
+    fi
 done
 ```
 
 **Key features:**
-- `nullglob`: If pattern doesn't match anything, loop body doesn't execute (no error)
-- `dotglob`: Hidden files like `.env` are included in `*` patterns
-- `globstar`: Makes `**` work for recursive directory matching (optional)
-- `git check-ignore -q`: Fast, accurate way to verify file is gitignored
+- **Directory patterns** (`logs/`): Use fast `cp -R` or `ln -s` for entire directory
+- **File patterns** (`logs/*.txt`, `.env`): Use glob expansion, process each file
+- **Symlink checking**: Check each item (directory or file) against `.swsymlink` patterns
+- **No argument limits**: Directory patterns don't expand to thousands of files
+- **Fast**: Preserves current `cp -R` performance for directories
 
 ### 3. Shell Options Required
 
 Set these options at the start of `_sw_copy_gitignored()`:
 
 ```bash
-# Enable glob options for correct behavior
-shopt -s nullglob   # Patterns with no matches expand to nothing (not themselves)
-shopt -s dotglob    # Include hidden files (like .env) in * patterns
-shopt -s globstar   # Enable ** for recursive directory matching (optional)
-```
-
-**Important:** Save and restore original shell options to avoid side effects:
-```bash
 # Save original state
 local original_nullglob=$(shopt -p nullglob)
 local original_dotglob=$(shopt -p dotglob)
-local original_globstar=$(shopt -p globstar)
 
-# Set options
-shopt -s nullglob dotglob globstar
+# Enable glob options for correct behavior
+shopt -s nullglob   # Patterns with no matches expand to nothing (not themselves)
+shopt -s dotglob    # Include hidden files (like .env) in * patterns
 
 # ... do work ...
 
-# Restore original state
+# Restore original state at end of function
 $original_nullglob
 $original_dotglob
-$original_globstar
 ```
+
+**Why these options:**
+- `nullglob`: If pattern `backend_app/db/store/*.db` matches nothing, loop doesn't execute (graceful)
+- `dotglob`: Pattern `*` includes `.env` and other hidden files
+
+**Note:** We don't need `globstar` because we use `cp -R` for directories, not `**/*` expansion
 
 ### 4. Parent Directory Creation
 
@@ -269,45 +287,137 @@ After implementation:
 ## Performance Considerations
 
 - **Before:** Processed only unique top-level items (fast, but broken for nested paths)
-- **After:** Uses direct glob expansion (equally fast OR faster, and correct)
+- **After:** Hybrid approach (equally fast for directories, fixes nested patterns)
 
-**Why this approach is performant:**
-- Shell glob expansion is implemented in C and highly optimized
-- Only processes files that match patterns (not all gitignored files)
-- Example: Pattern `backend_app/db/store/*.db` might match 3 files
-  - Old approach would have failed entirely
-  - Alternative "get all files" approach would process 50,000+ files
-  - This approach processes exactly 3 files ✅
+**Why the hybrid approach is optimal:**
 
-**Performance comparison scenarios:**
+1. **Directory patterns** (`logs/`): Keep fast `cp -R` behavior
+   - Pattern `logs/` doesn't expand to files - just matches the directory itself
+   - Use `cp -R logs/` same as current code (very fast)
+   - No change in performance ✅
 
-| Scenario | Pattern | Old Approach | This Approach |
-|----------|---------|--------------|---------------|
-| Simple top-level | `.env` | Process 1 item ✅ | Process 1 file ✅ |
-| Top-level directory | `logs/` | Process 1 item (copy with `cp -R`) ✅ | Process ~10 files (glob expansion) ✅ |
-| Nested pattern | `backend_app/db/store/*.db` | Fails entirely ❌ | Process ~3 matching files ✅ |
-| Large repo with node_modules | Any pattern | Process 1-10 top-level items | Process only matching files, ignores node_modules/ |
+2. **File patterns with wildcards** (`backend_app/db/store/*.db`): Use glob expansion
+   - Shell glob expansion is implemented in C and highly optimized
+   - Only processes files that match the pattern
+   - Pattern `backend_app/db/store/*.db` expands to 2-3 matching files, not 50,000
 
-**Conclusion:** This approach is both correct AND performant. No optimization needed.
+3. **Simple file patterns** (`.env`): Use glob expansion
+   - Pattern `.env` expands to just that one file
+   - Essentially same as current behavior
+
+**Performance comparison:**
+
+| Scenario | Pattern | Old Approach | Hybrid Approach |
+|----------|---------|--------------|-----------------|
+| Top-level file | `.env` | ✅ Fast (1 item) | ✅ Fast (1 file) |
+| Top-level directory | `logs/` | ✅ Fast (`cp -R`) | ✅ Fast (`cp -R`, unchanged) |
+| Nested directory | `backend_app/config/` | ❌ Fails | ✅ Fast (`cp -R`) |
+| Nested file pattern | `backend_app/db/store/*.db` | ❌ Fails | ✅ Fast (glob → 3 files) |
+| Large repo with node_modules | `logs/*.txt` | ❌ Fails for nested | ✅ Fast (only .txt files in logs/) |
+
+**Key advantage:** No argument list limits or performance degradation because:
+- Directories use `cp -R` (don't expand to individual files)
+- Wildcards only expand to matching files (not entire repo)
+
+**Conclusion:** This approach fixes the bug with **zero performance penalty** for existing patterns.
 
 ## Edge Cases to Handle
 
 1. **Empty patterns** - skip blank lines (already handled by existing code)
 2. **Comment lines** - skip `#` lines (already handled by existing code)
-3. **Trailing slashes** - convert `logs/` to `logs/**/*` for directory recursion
+3. **Trailing slashes** - patterns ending with `/` are treated as directory patterns
 4. **Patterns with no matches** - `nullglob` option makes loop body not execute (graceful)
 5. **Hidden files** - `dotglob` option ensures `.env` matches `*` patterns
-6. **Spaces in filenames** - properly quote variables (`"$file"`, not `$file`)
-7. **Symlinks** - verify target exists before creating symlink
-8. **Files that aren't actually gitignored** - `git check-ignore` verifies before copying
-9. **Pattern vs file ambiguity** - Check if file exists (`[[ -f "$base_dir/$file" ]]`) to distinguish between no-match and is-directory
+6. **Spaces in filenames** - glob expansion handles spaces correctly; quote variables in commands
+7. **Symlink targets** - use absolute paths in `ln -s "$base_dir/$file"` for reliability
+8. **Files that aren't actually gitignored** - `git check-ignore` verifies before copying/symlinking
+9. **Directory vs file** - Check `[[ -d ]]` and `[[ -f ]]` to distinguish properly
+
+## Symlink Behavior Examples
+
+**Example 1: Symlink entire directory**
+```bash
+# .swcopy
+backend_app/config/
+
+# .swsymlink
+backend_app/config/
+
+# Result: backend_app/config/ is symlinked as a whole directory
+```
+
+**Example 2: Symlink individual files**
+```bash
+# .swcopy
+*.md
+backend_app/db/store/*.db
+
+# .swsymlink
+CLAUDE.local.md
+
+# Result:
+# - CLAUDE.local.md is symlinked
+# - README.md is copied (not in .swsymlink)
+# - backend_app/db/store/*.db files are copied (not in .swsymlink)
+```
+
+**Example 3: Mixed - copy directory but symlink specific files**
+```bash
+# .swcopy
+backend_app/config/
+CLAUDE.local.md
+
+# .swsymlink
+CLAUDE.local.md
+
+# Result:
+# - backend_app/config/ is copied as directory (not in .swsymlink)
+# - CLAUDE.local.md is symlinked
+```
+
+**Note:** Symlink patterns must match items from `.swcopy` patterns:
+- If `.swcopy` has `logs/`, `.swsymlink` needs `logs/` to symlink the directory
+- If `.swcopy` has `logs/*.txt`, `.swsymlink` needs `logs/*.txt` or specific files to symlink them
 
 ## Summary
 
 This fix will:
-- ✅ Make nested patterns like `backend_app/db/store/*.db` work
-- ✅ Preserve existing behavior for top-level patterns
+- ✅ Make nested patterns like `backend_app/db/store/*.db` work (fixes the bug)
+- ✅ Preserve existing behavior for directory patterns (still uses fast `cp -R`)
 - ✅ Intelligently copy only matching files (not entire parent directories)
 - ✅ Support glob patterns at any nesting level
-- ✅ Work with both `.swcopy` and `.swsymlink`
+- ✅ Work with both `.swcopy` and `.swsymlink` for both directories and files
 - ✅ Maintain backward compatibility with existing `.swcopy` files
+- ✅ Zero performance penalty for existing patterns
+
+## Advantages of Hybrid Approach
+
+1. **Best of both worlds:**
+   - Fast `cp -R` for directories (preserves current behavior)
+   - Glob expansion for wildcards (fixes the bug)
+
+2. **No argument list limits:**
+   - Directory patterns like `logs/` don't expand to thousands of files
+   - They just match the directory itself, then `cp -R`
+
+3. **Correct and performant:**
+   - Pattern `backend_app/db/store/*.db` expands to only matching files
+   - Not all 50,000 files in the repo
+
+4. **Symlink flexibility:**
+   - Can symlink entire directories: `logs/` in `.swsymlink`
+   - Can symlink individual files: `logs/*.txt` in `.swsymlink`
+   - Natural behavior that mirrors copy logic
+
+## Remaining Considerations
+
+**Pattern syntax limitations:**
+- Shell globs don't support all gitignore features (e.g., `!` negation, `**` without globstar)
+- Users should test patterns to ensure they work as expected
+- Document common patterns in README
+
+**Spaces in patterns:**
+- Patterns with spaces (e.g., `my logs/*.txt`) may not work as expected
+- This is rare in `.swcopy` usage but worth documenting
+
+**Overall:** The hybrid approach eliminates all major downsides while fixing the bug. It's the optimal solution.
