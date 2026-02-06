@@ -990,6 +990,32 @@ EOF
     [[ "$(cat "$WT_DIR/feature-contents-ignored/backend_app/db/store/test.db")" == "data" ]]
 }
 
+@test "sw add: .swcopy supports ** recursive glob pattern" {
+    # ** requires bash 4+ (globstar) or zsh; skip on bash 3.x
+    shopt -s globstar 2>/dev/null || skip "globstar not supported (bash 3.x)"
+
+    mkdir -p app/db/store app/cache
+    echo "data1" > app/db/store/test.db
+    echo "data2" > app/cache/sessions.db
+    echo "not a db" > app/db/store/readme.txt
+    cat > .gitignore <<'EOF'
+**/*.db
+EOF
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "**/*.db" > .swcopy
+
+    run sw add feature-globstar
+
+    [ "$status" -eq 0 ]
+    # ** should match .db files at any depth
+    [ -f "$WT_DIR/feature-globstar/app/db/store/test.db" ]
+    [ -f "$WT_DIR/feature-globstar/app/cache/sessions.db" ]
+    # Non-matching file should NOT be copied
+    [ ! -f "$WT_DIR/feature-globstar/app/db/store/readme.txt" ]
+}
+
 # ============================================================================
 # sw add: .swsymlink support
 # ============================================================================

@@ -115,12 +115,15 @@ _sw_copy_gitignored() {
     if [[ -n "$BASH_VERSION" ]]; then
         local original_nullglob=$(shopt -p nullglob)
         local original_dotglob=$(shopt -p dotglob)
+        local original_globstar=$(shopt -p globstar 2>/dev/null || true)
         shopt -s nullglob dotglob
+        shopt -s globstar 2>/dev/null || true  # bash 4+ only; ** falls back to * on bash 3
     elif [[ -n "$ZSH_VERSION" ]]; then
-        local had_nullglob=false had_dotglob=false
+        local had_nullglob=false had_dotglob=false had_globstar=false
         [[ -o nullglob ]] && had_nullglob=true
         [[ -o globdots ]] && had_dotglob=true
-        setopt NULL_GLOB GLOB_DOTS
+        [[ -o globstarshort ]] && had_globstar=true
+        setopt NULL_GLOB GLOB_DOTS GLOB_STAR_SHORT
     fi
 
     # Track processed items to avoid duplicates across overlapping patterns
@@ -194,9 +197,11 @@ _sw_copy_gitignored() {
     if [[ -n "$BASH_VERSION" ]]; then
         $original_nullglob
         $original_dotglob
+        [[ -n "$original_globstar" ]] && $original_globstar
     elif [[ -n "$ZSH_VERSION" ]]; then
         $had_nullglob || unsetopt NULL_GLOB
         $had_dotglob || unsetopt GLOB_DOTS
+        $had_globstar || unsetopt GLOB_STAR_SHORT
     fi
 
     # Restore original directory

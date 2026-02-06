@@ -168,13 +168,15 @@ Create a `.swcopy` file in your repo root to list gitignored files that should b
 # .swcopy - gitignored files to copy to new worktrees
 .env
 CLAUDE.local.md
-.envrc
+logs/
+backend_app/db/store/*.db
+**/*.sqlite
 ```
 
 ```bash
 sw add feature-auth
 # Created: ../myapp-worktrees/feature-auth (new branch feature-auth)
-# Copied: .env CLAUDE.local.md .envrc
+# Copied: .env CLAUDE.local.md logs/ backend_app/db/store/cache.db
 ```
 
 If no `.swcopy` exists, no gitignored files are copied.
@@ -196,8 +198,9 @@ Both `.swcopy` and `.swsymlink` use the same format:
 
 - One pattern per line
 - Comments start with `#`
-- Glob patterns supported (`*.log`, `CLAUDE*`)
-- Directories should have trailing `/`
+- Glob patterns supported (`*.log`, `CLAUDE*`, `backend_app/db/*.db`)
+- `**` for recursive matching (`**/*.sqlite` matches at any depth; requires bash 4+ or zsh)
+- Directories should have trailing `/` (`logs/`, `backend_app/config/`)
 - Files must be in `.swcopy` to be copied or symlinked
 
 ## Dependencies
