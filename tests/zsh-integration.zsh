@@ -209,6 +209,124 @@ assert "git worktree add output suppressed" $git_quiet
 sw rm quiet-check >/dev/null 2>&1
 
 echo ""
+echo "--- XTRACE-Enabled Tests (reproduces user env with set -x) ---"
+
+# XTRACE output goes to stderr. We test:
+# 1. stdout is clean (only "Created:" + "copy"/"link" lines)
+# 2. stderr has no _sw_copy_gitignored traces AFTER its setopt NO_XTRACE
+# 3. symlinks are actually created
+# 4. combined output (what user sees in terminal) has no bare variable assignments
+
+local xtrace_stderr="$TEST_DIR/xtrace-stderr"
+
+# -- stdout clean with XTRACE enabled --
+cd "$TEST_DIR/test-repo"
+echo "backend_app/db/store/*.db" > .swcopy
+rm -f .swsymlink
+setopt XTRACE
+output=$(sw add xtrace-stdout 2>"$xtrace_stderr")
+unsetopt XTRACE
+
+stdout_clean=true
+while IFS= read -r line; do
+    if [[ "$line" != Created:* ]] && [[ "$line" != "  copy  "* ]] && [[ "$line" != "  link  "* ]]; then
+        stdout_clean=false
+        echo "  Unexpected stdout: '$line'"
+    fi
+done <<< "$output"
+assert "stdout clean with XTRACE enabled" $stdout_clean
+sw rm xtrace-stdout >/dev/null 2>&1
+
+# -- no _sw_copy_gitignored traces in stderr after setopt NO_XTRACE --
+# XTRACE from sw() and _sw_cmd_add() is expected; but once _sw_copy_gitignored
+# sets NO_XTRACE, no further traces should come from that function
+cd "$TEST_DIR/test-repo"
+echo "backend_app/db/store/*.db" > .swcopy
+rm -f .swsymlink
+setopt XTRACE
+sw add xtrace-trace >/dev/null 2>"$xtrace_stderr"
+unsetopt XTRACE
+
+trace_no_leak=true
+local found_setopt=false
+while IFS= read -r line; do
+    if [[ "$line" == *"setopt LOCAL_OPTIONS NO_XTRACE"* ]]; then
+        found_setopt=true
+        continue
+    fi
+    if $found_setopt && [[ "$line" == *"_sw_copy_gitignored:"* ]]; then
+        trace_no_leak=false
+        echo "  Trace after NO_XTRACE: $line"
+    fi
+done < "$xtrace_stderr"
+assert "no _sw_copy_gitignored traces after setopt NO_XTRACE" $trace_no_leak
+sw rm xtrace-trace >/dev/null 2>&1
+
+# -- combined output has no bare variable assignment lines --
+# Reproduces what user sees in terminal (stdout+stderr mixed)
+cd "$TEST_DIR/test-repo"
+echo "backend_app/db/store/*.db" > .swcopy
+rm -f .swsymlink
+setopt XTRACE
+output=$(sw add xtrace-combined 2>&1)
+unsetopt XTRACE
+
+# Check for bare variable assignments (without trace prefix like "+func:line>")
+# These are the exact patterns the user reported seeing
+combined_clean=true
+while IFS= read -r line; do
+    # Skip lines with zsh trace prefix (these are expected XTRACE from other funcs)
+    [[ "$line" == +* ]] && continue
+    # Non-trace lines must be expected output
+    if [[ "$line" != Created:* ]] && [[ "$line" != "  copy  "* ]] && [[ "$line" != "  link  "* ]]; then
+        combined_clean=false
+        echo "  Unexpected non-trace line: '$line'"
+    fi
+done <<< "$output"
+assert "no bare variable assignments in combined output" $combined_clean
+sw rm xtrace-combined >/dev/null 2>&1
+
+# -- Symlinks created with XTRACE enabled --
+cd "$TEST_DIR/test-repo"
+mkdir -p backend_app/config
+echo "setting1" > backend_app/config/app.yml
+echo "setting2" > backend_app/config/db.yml
+echo "backend_app/config/" >> .gitignore
+git add .gitignore && git commit -q -m "gitignore for xtrace symlink test"
+rm -f .swcopy
+echo "backend_app/config/" > .swsymlink
+setopt XTRACE
+sw add xtrace-symlink >/dev/null 2>&1
+unsetopt XTRACE
+assert "symlink created with XTRACE: is a symlink" test -L "$WT_DIR/xtrace-symlink/backend_app/config"
+assert "symlink created with XTRACE: content accessible" test -f "$WT_DIR/xtrace-symlink/backend_app/config/app.yml"
+sw rm xtrace-symlink >/dev/null 2>&1
+
+# -- Symlink stdout output correct with XTRACE enabled --
+cd "$TEST_DIR/test-repo"
+rm -f .swcopy
+echo "backend_app/config/" > .swsymlink
+setopt XTRACE
+output=$(sw add xtrace-symout 2>"$xtrace_stderr")
+unsetopt XTRACE
+
+sym_stdout_ok=true
+# Must have link line on stdout
+if [[ "$output" != *"  link  "* ]]; then
+    sym_stdout_ok=false
+    echo "  No '  link  ' in stdout"
+fi
+# stdout must be clean
+while IFS= read -r line; do
+    if [[ "$line" != Created:* ]] && [[ "$line" != "  copy  "* ]] && [[ "$line" != "  link  "* ]]; then
+        sym_stdout_ok=false
+        echo "  Unexpected stdout: '$line'"
+    fi
+done <<< "$output"
+assert "symlink stdout clean with XTRACE enabled" $sym_stdout_ok
+sw rm xtrace-symout >/dev/null 2>&1
+
+echo ""
 echo "--- .swsymlink Nested Patterns (zsh-specific) ---"
 
 # -- Nested directory symlink --
@@ -218,7 +336,7 @@ echo "setting1" > backend_app/config/app.yml
 echo "setting2" > backend_app/config/db.yml
 echo "backend_app/config/" >> .gitignore
 git add .gitignore && git commit -q -m "gitignore for nested symlink"
-echo "backend_app/config/" > .swcopy
+rm -f .swcopy
 echo "backend_app/config/" > .swsymlink
 
 sw add nested-symdir >/dev/null 2>&1
@@ -226,9 +344,9 @@ assert "nested symlink dir: is a symlink" test -L "$WT_DIR/nested-symdir/backend
 assert "nested symlink dir: content accessible" test -f "$WT_DIR/nested-symdir/backend_app/config/app.yml"
 sw rm nested-symdir >/dev/null 2>&1
 
-# -- Nested file symlink --
+# -- Nested file symlink (independent files, no overlap) --
 cd "$TEST_DIR/test-repo"
-echo "backend_app/config/*.yml" > .swcopy
+echo "backend_app/config/app.yml" > .swcopy
 echo "backend_app/config/db.yml" > .swsymlink
 
 sw add nested-symfile >/dev/null 2>&1
@@ -238,7 +356,7 @@ sw rm nested-symfile >/dev/null 2>&1
 
 # -- Symlink output reported with "link" label --
 cd "$TEST_DIR/test-repo"
-echo "backend_app/config/" > .swcopy
+rm -f .swcopy
 echo "backend_app/config/" > .swsymlink
 output=$(sw add symlink-output 2>&1)
 

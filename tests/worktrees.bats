@@ -804,6 +804,33 @@ EOF
     [[ "$output" != *"file="* ]]
 }
 
+@test "sw add: output contains only expected lines (copy)" {
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    echo "SECRET=abc" > .env
+    echo "local" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    cat > .swcopy <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+
+    run sw add feature-strict-output
+
+    [ "$status" -eq 0 ]
+    # Every line must be a "Created:" line or a "  copy  "/"  link  " line
+    while IFS= read -r line; do
+        [[ "$line" == Created:* ]] || [[ "$line" == "  copy  "* ]] || [[ "$line" == "  link  "* ]] || {
+            echo "Unexpected output line: '$line'"
+            false
+        }
+    done <<< "$output"
+}
+
 @test "sw add -s: copies files before switching" {
     # Create gitignore and file
     echo ".env" >> .gitignore
@@ -1048,12 +1075,8 @@ EOF
     git add .gitignore
     git commit -m "Add gitignore"
 
-    # Create .swcopy to include both files
-    cat > .swcopy <<'EOF'
-.env
-CLAUDE.local.md
-EOF
-    # Create .swsymlink to symlink CLAUDE.local.md
+    # .swcopy: copy .env; .swsymlink: symlink CLAUDE.local.md (independent)
+    echo ".env" > .swcopy
     echo "CLAUDE.local.md" > .swsymlink
 
     run sw add feature-symlink
@@ -1074,7 +1097,6 @@ EOF
     git add .gitignore
     git commit -m "Add gitignore"
 
-    echo "CLAUDE.local.md" > .swcopy
     echo "CLAUDE.local.md" > .swsymlink
 
     sw add feature-symlink-content
@@ -1101,13 +1123,11 @@ EOF
     git add .gitignore
     git commit -m "Add gitignore"
 
-    # Include all in .swcopy
+    # .swcopy: non-CLAUDE files; .swsymlink: CLAUDE* pattern
     cat > .swcopy <<'EOF'
 .env
-CLAUDE.local.md
 .envrc
 EOF
-    # Symlink CLAUDE* files
     echo "CLAUDE*" > .swsymlink
 
     run sw add feature-symlink-glob
@@ -1131,7 +1151,6 @@ EOF
     git add .gitignore
     git commit -m "Add gitignore"
 
-    echo "config/" > .swcopy
     echo "config/" > .swsymlink
 
     run sw add feature-symlink-dir
@@ -1153,11 +1172,7 @@ EOF
     git add .gitignore
     git commit -m "Add gitignore"
 
-    # Include both in .swcopy
-    cat > .swcopy <<'EOF'
-.env
-CLAUDE.local.md
-EOF
+    echo ".env" > .swcopy
     echo "CLAUDE.local.md" > .swsymlink
 
     run sw add feature-symlink-output
@@ -1169,7 +1184,34 @@ EOF
     [[ "$output" == *"  link  CLAUDE.local.md"* ]]
 }
 
-@test "sw add: .swsymlink without .swcopy does nothing" {
+@test "sw add: output contains only expected lines (copy + symlink)" {
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    echo "SECRET=abc" > .env
+    echo "local" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo ".env" > .swcopy
+    echo "CLAUDE.local.md" > .swsymlink
+
+    run sw add feature-strict-mixed
+
+    [ "$status" -eq 0 ]
+    # Must have at least one link line (proves symlinks worked)
+    [[ "$output" == *"  link  "* ]]
+    # Every line must be a "Created:" line or a "  copy  "/"  link  " line
+    while IFS= read -r line; do
+        [[ "$line" == Created:* ]] || [[ "$line" == "  copy  "* ]] || [[ "$line" == "  link  "* ]] || {
+            echo "Unexpected output line: '$line'"
+            false
+        }
+    done <<< "$output"
+}
+
+@test "sw add: .swsymlink works independently without .swcopy" {
     cat > .gitignore <<'EOF'
 .env
 CLAUDE.local.md
@@ -1185,9 +1227,46 @@ EOF
     run sw add feature-symlink-only
 
     [ "$status" -eq 0 ]
-    # Nothing should exist (no .swcopy)
+    # CLAUDE.local.md should be symlinked (from .swsymlink alone)
+    [ -L "$WT_DIR/feature-symlink-only/CLAUDE.local.md" ]
+    # .env should NOT exist (not in either file)
     [ ! -e "$WT_DIR/feature-symlink-only/.env" ]
-    [ ! -e "$WT_DIR/feature-symlink-only/CLAUDE.local.md" ]
+}
+
+@test "sw add: errors when same item is in both .swcopy and .swsymlink" {
+    echo "CLAUDE.local.md" >> .gitignore
+    echo "local" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    echo "CLAUDE.local.md" > .swcopy
+    echo "CLAUDE.local.md" > .swsymlink
+
+    run sw add feature-overlap
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"in both .swcopy and .swsymlink"* ]]
+    # Worktree should still be created (git created it) but no files provisioned
+}
+
+@test "sw add: overlap detected across glob and literal patterns" {
+    cat > .gitignore <<'EOF'
+.env
+CLAUDE.local.md
+EOF
+    echo "SECRET=abc" > .env
+    echo "local" > CLAUDE.local.md
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # .swcopy glob matches CLAUDE.local.md, which is also in .swsymlink
+    echo "CLAUDE*" > .swcopy
+    echo "CLAUDE.local.md" > .swsymlink
+
+    run sw add feature-overlap-glob
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"in both .swcopy and .swsymlink"* ]]
 }
 
 # ============================================================================
@@ -1203,7 +1282,6 @@ EOF
     git add .gitignore
     git commit -m "Add gitignore"
 
-    echo "backend_app/config/" > .swcopy
     echo "backend_app/config/" > .swsymlink
 
     run sw add feature-nested-symdir
@@ -1226,8 +1304,8 @@ EOF
     git add .gitignore
     git commit -m "Add gitignore"
 
-    # Copy both, symlink only local.yml
-    echo "backend_app/config/*.yml" > .swcopy
+    # Copy app.yml, symlink local.yml (independent, no overlap)
+    echo "backend_app/config/app.yml" > .swcopy
     echo "backend_app/config/local.yml" > .swsymlink
 
     run sw add feature-nested-symfile

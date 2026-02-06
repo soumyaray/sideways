@@ -66,40 +66,65 @@ _sw_read_patterns() {
     done < "$file"
 }
 
-# Check if an item matches any symlink pattern
-# Args: $1 = item path, remaining args = symlink patterns
-# Returns: 0 if should symlink, 1 otherwise
-_sw_should_symlink() {
-    local item="${1%/}"
-    shift
-    local p
-    for p in "$@"; do
-        [[ "$item" == ${p%/} ]] && return 0
+# Resolve patterns to actual gitignored files/dirs
+# Must be called from base_dir with glob shell options already set
+# Args: patterns (one per arg)
+# Result: populates _sw_resolved array (dirs end with /)
+_sw_resolve_patterns() {
+    _sw_resolved=()
+    local seen="" pattern
+    for pattern in "$@"; do
+        if [[ "$pattern" == */ ]]; then
+            local dir="${pattern%/}"
+            case "$seen" in *"|$dir/|"*) continue ;; esac
+            if [[ -d "$dir" ]] && \
+               { git check-ignore -q "$dir" 2>/dev/null || \
+                 [[ -n "$(git ls-files --others --ignored --exclude-standard "$dir" 2>/dev/null | head -1)" ]]; }; then
+                seen="$seen|$dir/|"
+                _sw_resolved+=("$dir/")
+            fi
+        else
+            local expanded_files=()
+            local f
+            for f in $pattern; do
+                [[ -f "$f" ]] && expanded_files+=("$f")
+            done
+            [[ ${#expanded_files[@]} -eq 0 ]] && continue
+            local gitignored_files
+            gitignored_files=$(printf '%s\n' "${expanded_files[@]}" | git check-ignore --stdin 2>/dev/null)
+            local file
+            while IFS= read -r file; do
+                [[ -z "$file" ]] && continue
+                case "$seen" in *"|$file|"*) continue ;; esac
+                seen="$seen|$file|"
+                _sw_resolved+=("$file")
+            done <<< "$gitignored_files"
+        fi
     done
-    return 1
 }
 
-# Copy gitignored files from base to new worktree
+# Copy and symlink gitignored files from base to new worktree
+# .swcopy patterns are copied, .swsymlink patterns are symlinked (independently)
 # Args: $1 = base_dir, $2 = worktree_path
 _sw_copy_gitignored() {
     local base_dir="$1"
     local wt_path="$2"
     local swcopy_file="$base_dir/.swcopy"
     local swsymlink_file="$base_dir/.swsymlink"
-    local copied=()
-    local symlinked=()
 
-    # If no .swcopy file, don't copy anything
-    [[ ! -f "$swcopy_file" ]] && return 0
+    # If neither config file exists, nothing to do
+    [[ ! -f "$swcopy_file" ]] && [[ ! -f "$swsymlink_file" ]] && return 0
 
     # Load .swcopy patterns
     local swcopy_patterns=()
     local p
-    while IFS= read -r p; do
-        swcopy_patterns+=("$p")
-    done < <(_sw_read_patterns "$swcopy_file")
+    if [[ -f "$swcopy_file" ]]; then
+        while IFS= read -r p; do
+            swcopy_patterns+=("$p")
+        done < <(_sw_read_patterns "$swcopy_file")
+    fi
 
-    # Load .swsymlink patterns if file exists
+    # Load .swsymlink patterns
     local swsymlink_patterns=()
     if [[ -f "$swsymlink_file" ]]; then
         while IFS= read -r p; do
@@ -123,70 +148,69 @@ _sw_copy_gitignored() {
         setopt GLOB_STAR_SHORT 2>/dev/null || true  # zsh 5.2+ only
     fi
 
-    # Track processed items to avoid duplicates across overlapping patterns
-    local processed=""
+    # --- Resolve patterns to actual gitignored items ---
+    # Call _sw_resolve_patterns directly (no subshell) to avoid zsh XTRACE leaks
+    local copy_items=() symlink_items=()
+    if [[ ${#swcopy_patterns[@]} -gt 0 ]]; then
+        _sw_resolve_patterns "${swcopy_patterns[@]}"
+        copy_items=("${_sw_resolved[@]}")
+    fi
+    if [[ ${#swsymlink_patterns[@]} -gt 0 ]]; then
+        _sw_resolve_patterns "${swsymlink_patterns[@]}"
+        symlink_items=("${_sw_resolved[@]}")
+    fi
 
-    local pattern
-    for pattern in "${swcopy_patterns[@]}"; do
-        if [[ "$pattern" == */ ]]; then
-            # Directory pattern (e.g., "logs/", "backend_app/config/")
-            local dir="${pattern%/}"
+    # --- Check for overlap between resolved items ---
+    local conflicts=()
+    local ci si
+    for si in "${symlink_items[@]}"; do
+        for ci in "${copy_items[@]}"; do
+            [[ "${si%/}" == "${ci%/}" ]] && conflicts+=("${si%/}")
+        done
+    done
+    if [[ ${#conflicts[@]} -gt 0 ]]; then
+        local c
+        for c in "${conflicts[@]}"; do
+            _sw_error "'$c' is in both .swcopy and .swsymlink (pick one)"
+        done
+        if [[ -n "$BASH_VERSION" ]]; then
+            $original_nullglob
+            $original_dotglob
+            [[ -n "$original_globstar" ]] && $original_globstar
+        fi
+        cd "$original_dir" || true
+        return 1
+    fi
 
-            # Skip if already processed
-            case "$processed" in *"|$dir/|"*) continue ;; esac
-
-            # Verify directory exists and is gitignored (or contains gitignored files)
-            if [[ -d "$dir" ]] && \
-               { git check-ignore -q "$dir" 2>/dev/null || \
-                 [[ -n "$(git ls-files --others --ignored --exclude-standard "$dir" 2>/dev/null | head -1)" ]]; }; then
-
-                processed="$processed|$dir/|"
-
-                # Create parent directories for nested paths
-                mkdir -p "$(dirname "$wt_path/$dir")"
-
-                if _sw_should_symlink "$dir" "${swsymlink_patterns[@]}"; then
-                    ln -s "$base_dir/$dir" "$wt_path/$dir" 2>/dev/null && symlinked+=("$dir/")
-                elif [[ -d "$wt_path/$dir" ]]; then
-                    # Target exists (e.g., git created it for tracked files) — merge contents
-                    cp -R "$dir/." "$wt_path/$dir/" 2>/dev/null && copied+=("$dir/")
-                else
-                    cp -R "$dir" "$wt_path/$dir" 2>/dev/null && copied+=("$dir/")
-                fi
+    # --- Execute copies ---
+    local copied=()
+    local item
+    for item in "${copy_items[@]}"; do
+        if [[ "$item" == */ ]]; then
+            local dir="${item%/}"
+            mkdir -p "$(dirname "$wt_path/$dir")"
+            if [[ -d "$wt_path/$dir" ]]; then
+                # Target exists (e.g., git created it for tracked files) — merge contents
+                cp -R "$dir/." "$wt_path/$dir/" 2>/dev/null && copied+=("$item")
+            else
+                cp -R "$dir" "$wt_path/$dir" 2>/dev/null && copied+=("$item")
             fi
         else
-            # File pattern with potential wildcards (e.g., "logs/*.txt", ".env")
-            local expanded_files=()
-            local f
-            for f in $pattern; do
-                [[ -f "$f" ]] && expanded_files+=("$f")
-            done
+            mkdir -p "$(dirname "$wt_path/$item")"
+            cp "$item" "$wt_path/$item" 2>/dev/null && copied+=("$item")
+        fi
+    done
 
-            # Skip if no files matched
-            [[ ${#expanded_files[@]} -eq 0 ]] && continue
-
-            # Batch-verify which files are gitignored (single git subprocess)
-            local gitignored_files
-            gitignored_files=$(printf '%s\n' "${expanded_files[@]}" | git check-ignore --stdin 2>/dev/null)
-
-            # Process each gitignored file
-            local file
-            while IFS= read -r file; do
-                [[ -z "$file" ]] && continue
-
-                # Skip if already processed (deduplication)
-                case "$processed" in *"|$file|"*) continue ;; esac
-                processed="$processed|$file|"
-
-                # Create parent directories for nested paths
-                mkdir -p "$(dirname "$wt_path/$file")"
-
-                if _sw_should_symlink "$file" "${swsymlink_patterns[@]}"; then
-                    ln -s "$base_dir/$file" "$wt_path/$file" 2>/dev/null && symlinked+=("$file")
-                else
-                    cp "$file" "$wt_path/$file" 2>/dev/null && copied+=("$file")
-                fi
-            done <<< "$gitignored_files"
+    # --- Execute symlinks ---
+    local symlinked=()
+    for item in "${symlink_items[@]}"; do
+        if [[ "$item" == */ ]]; then
+            local dir="${item%/}"
+            mkdir -p "$(dirname "$wt_path/$dir")"
+            ln -s "$base_dir/$dir" "$wt_path/$dir" 2>/dev/null && symlinked+=("$item")
+        else
+            mkdir -p "$(dirname "$wt_path/$item")"
+            ln -s "$base_dir/$item" "$wt_path/$item" 2>/dev/null && symlinked+=("$item")
         fi
     done
 
@@ -201,7 +225,6 @@ _sw_copy_gitignored() {
     cd "$original_dir" || true
 
     # Output per-line list of copied and symlinked items
-    local item
     for item in "${copied[@]}"; do
         echo "  copy  $item"
     done
@@ -268,8 +291,8 @@ _sw_cmd_add() {
         echo "Created: $wt_path (new branch $branch)"
     fi
 
-    # Copy gitignored files to new worktree
-    _sw_copy_gitignored "$base_dir" "$wt_abs_path"
+    # Copy/symlink gitignored files to new worktree
+    _sw_copy_gitignored "$base_dir" "$wt_abs_path" || return 1
 
     if $switch; then
         cd "$wt_path"
@@ -561,7 +584,7 @@ From base directory only:
                                Uses existing branch or creates new one
                                -s, --switch: cd into worktree after creation
                                -o, --open: open worktree in editor
-                               Copies gitignored files (see .swcopy)
+                               Copies/symlinks gitignored files (see below)
   rm [-d|-D] <branch>          Remove worktree (branch kept by default)
                                -d: also delete branch (if merged)
                                -D: also delete branch (force)
@@ -580,11 +603,12 @@ Anywhere:
   --help, -h                   Show this help message
   --version, -V                Show version
 
-Config files:
-  .swcopy                      Patterns for gitignored files to copy
-                               (e.g., .env, CLAUDE.local.md)
-  .swsymlink                   Patterns to symlink instead of copy
+Config files (each works independently):
+  .swcopy                      Gitignored file patterns to copy to worktrees
+                               (e.g., .env, node_modules/)
+  .swsymlink                   Gitignored file patterns to symlink to worktrees
                                (e.g., CLAUDE.local.md)
+                               Same item in both files is an error
 EOF
 }
 
