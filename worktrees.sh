@@ -119,11 +119,7 @@ _sw_copy_gitignored() {
         shopt -s nullglob dotglob
         shopt -s globstar 2>/dev/null || true  # bash 4+ only; ** falls back to * on bash 3
     elif [[ -n "$ZSH_VERSION" ]]; then
-        local had_nullglob=false had_dotglob=false had_globstar=false
-        [[ -o nullglob ]] && had_nullglob=true
-        [[ -o globdots ]] && had_dotglob=true
-        [[ -o globstarshort ]] && had_globstar=true
-        setopt NULL_GLOB GLOB_DOTS GLOB_STAR_SHORT
+        setopt LOCAL_OPTIONS NULL_GLOB GLOB_DOTS GLOB_STAR_SHORT GLOB_SUBST NO_XTRACE NO_VERBOSE
     fi
 
     # Track processed items to avoid duplicates across overlapping patterns
@@ -193,15 +189,11 @@ _sw_copy_gitignored() {
         fi
     done
 
-    # Restore shell options
+    # Restore shell options (zsh restores automatically via LOCAL_OPTIONS)
     if [[ -n "$BASH_VERSION" ]]; then
         $original_nullglob
         $original_dotglob
         [[ -n "$original_globstar" ]] && $original_globstar
-    elif [[ -n "$ZSH_VERSION" ]]; then
-        $had_nullglob || unsetopt NULL_GLOB
-        $had_dotglob || unsetopt GLOB_DOTS
-        $had_globstar || unsetopt GLOB_STAR_SHORT
     fi
 
     # Restore original directory
@@ -259,15 +251,18 @@ _sw_cmd_add() {
 
     local wt_path="$worktrees_dir_rel/$branch"
     local wt_abs_path="$worktrees_dir_abs/$branch"
+    local git_output
     if git show-ref --verify --quiet "refs/heads/$branch"; then
         # Branch exists, use it
-        if ! git worktree add "$wt_path" "$branch"; then
+        if ! git_output=$(git worktree add "$wt_path" "$branch" 2>&1); then
+            echo "$git_output" >&2
             return 1
         fi
         echo "Created: $wt_path (existing branch $branch)"
     else
         # Create new branch
-        if ! git worktree add "$wt_path" -b "$branch"; then
+        if ! git_output=$(git worktree add "$wt_path" -b "$branch" 2>&1); then
+            echo "$git_output" >&2
             return 1
         fi
         echo "Created: $wt_path (new branch $branch)"

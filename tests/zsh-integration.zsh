@@ -97,6 +97,154 @@ run_test "sw add branch-2" "sw add branch-2"
 run_test "sw rm branch-1" "sw rm branch-1"
 run_test "sw rm -D branch-2" "sw rm -D branch-2"
 
+# ==========================================================================
+# .swcopy glob expansion tests (zsh-specific)
+# Zsh doesn't expand globs in variables by default (unlike bash).
+# These tests catch regressions in GLOB_SUBST and GLOB_STAR_SHORT handling.
+# ==========================================================================
+
+echo ""
+echo "--- .swcopy Glob Expansion (zsh-specific) ---"
+
+# Assert helper for file/dir existence checks
+assert() {
+    local name="$1"
+    shift
+    if "$@"; then
+        echo "${GREEN}✓${NC} $name"
+        ((PASS++))
+    else
+        echo "${RED}✗${NC} $name"
+        ((FAIL++))
+    fi
+}
+
+# Worktrees dir for current repo (mirrors sideways path convention)
+WT_DIR="$TEST_DIR/test-repo-worktrees"
+
+# -- Nested glob pattern (the bug: backend_app/db/store/*.db) --
+cd "$TEST_DIR/test-repo"
+mkdir -p backend_app/db/store
+echo "data1" > backend_app/db/store/test.db
+echo "data2" > backend_app/db/store/cache.db
+echo "readme" > backend_app/db/store/readme.txt
+echo "backend_app/db/store/*.db" > .gitignore
+git add .gitignore && git commit -q -m "gitignore for nested glob"
+echo "backend_app/db/store/*.db" > .swcopy
+
+sw add nested-glob >/dev/null 2>&1
+assert "nested glob: test.db copied" test -f "$WT_DIR/nested-glob/backend_app/db/store/test.db"
+assert "nested glob: cache.db copied" test -f "$WT_DIR/nested-glob/backend_app/db/store/cache.db"
+assert "nested glob: readme.txt NOT copied" test ! -f "$WT_DIR/nested-glob/backend_app/db/store/readme.txt"
+sw rm nested-glob >/dev/null 2>&1
+
+# -- Top-level glob pattern (*.log) --
+cd "$TEST_DIR/test-repo"
+echo "log1" > debug.log
+echo "log2" > app.log
+echo "SECRET" > .env
+echo -e "*.log\n.env" > .gitignore
+git add .gitignore && git commit -q -m "gitignore for top-level glob"
+echo "*.log" > .swcopy
+
+sw add top-glob >/dev/null 2>&1
+assert "top-level glob: debug.log copied" test -f "$WT_DIR/top-glob/debug.log"
+assert "top-level glob: app.log copied" test -f "$WT_DIR/top-glob/app.log"
+assert "top-level glob: .env NOT copied" test ! -f "$WT_DIR/top-glob/.env"
+sw rm top-glob >/dev/null 2>&1
+
+# -- Recursive glob pattern (**/*.db) --
+cd "$TEST_DIR/test-repo"
+mkdir -p app/cache
+echo "sess" > app/cache/sessions.db
+echo "**/*.db" > .gitignore
+git add .gitignore && git commit -q -m "gitignore for recursive glob"
+echo "**/*.db" > .swcopy
+
+sw add recursive-glob >/dev/null 2>&1
+assert "recursive glob: nested test.db copied" test -f "$WT_DIR/recursive-glob/backend_app/db/store/test.db"
+assert "recursive glob: sessions.db copied" test -f "$WT_DIR/recursive-glob/app/cache/sessions.db"
+assert "recursive glob: readme.txt NOT copied" test ! -f "$WT_DIR/recursive-glob/backend_app/db/store/readme.txt"
+sw rm recursive-glob >/dev/null 2>&1
+
+# -- Mixed top-level and nested patterns --
+cd "$TEST_DIR/test-repo"
+cat > .gitignore <<'GIEOF'
+.env
+backend_app/db/store/*.db
+GIEOF
+git add .gitignore && git commit -q -m "gitignore for mixed patterns"
+cat > .swcopy <<'SWEOF'
+.env
+backend_app/db/store/*.db
+SWEOF
+
+sw add mixed-patterns >/dev/null 2>&1
+assert "mixed: .env copied" test -f "$WT_DIR/mixed-patterns/.env"
+assert "mixed: nested test.db copied" test -f "$WT_DIR/mixed-patterns/backend_app/db/store/test.db"
+sw rm mixed-patterns >/dev/null 2>&1
+
+# -- No trace output leaked --
+cd "$TEST_DIR/test-repo"
+echo "backend_app/db/store/*.db" > .swcopy
+output=$(sw add trace-check 2>&1)
+
+trace_clean=true
+if [[ "$output" == *"f="* ]] || [[ "$output" == *"gitignored_files="* ]] || [[ "$output" == *"file="* ]]; then
+    trace_clean=false
+fi
+assert "no trace output (f=, gitignored_files=, file=)" $trace_clean
+sw rm trace-check >/dev/null 2>&1
+
+# -- Git output suppressed --
+cd "$TEST_DIR/test-repo"
+rm -f .swcopy
+output=$(sw add quiet-check 2>&1)
+
+git_quiet=true
+if [[ "$output" == *"Preparing worktree"* ]] || [[ "$output" == *"HEAD is now at"* ]]; then
+    git_quiet=false
+fi
+assert "git worktree add output suppressed" $git_quiet
+sw rm quiet-check >/dev/null 2>&1
+
+echo ""
+echo "--- .swsymlink Nested Patterns (zsh-specific) ---"
+
+# -- Nested directory symlink --
+cd "$TEST_DIR/test-repo"
+mkdir -p backend_app/config
+echo "setting1" > backend_app/config/app.yml
+echo "setting2" > backend_app/config/db.yml
+echo "backend_app/config/" >> .gitignore
+git add .gitignore && git commit -q -m "gitignore for nested symlink"
+echo "backend_app/config/" > .swcopy
+echo "backend_app/config/" > .swsymlink
+
+sw add nested-symdir >/dev/null 2>&1
+assert "nested symlink dir: is a symlink" test -L "$WT_DIR/nested-symdir/backend_app/config"
+assert "nested symlink dir: content accessible" test -f "$WT_DIR/nested-symdir/backend_app/config/app.yml"
+sw rm nested-symdir >/dev/null 2>&1
+
+# -- Nested file symlink --
+cd "$TEST_DIR/test-repo"
+echo "backend_app/config/*.yml" > .swcopy
+echo "backend_app/config/db.yml" > .swsymlink
+
+sw add nested-symfile >/dev/null 2>&1
+assert "nested symlink file: db.yml is symlink" test -L "$WT_DIR/nested-symfile/backend_app/config/db.yml"
+assert "nested symlink file: app.yml is regular file" test -f "$WT_DIR/nested-symfile/backend_app/config/app.yml" -a ! -L "$WT_DIR/nested-symfile/backend_app/config/app.yml"
+sw rm nested-symfile >/dev/null 2>&1
+
+# -- Symlink output reported --
+cd "$TEST_DIR/test-repo"
+echo "backend_app/config/" > .swcopy
+echo "backend_app/config/" > .swsymlink
+output=$(sw add symlink-output 2>&1)
+
+assert "symlink output mentions Symlinked:" test "${output[(I)Symlinked:*]}" -gt 0
+sw rm symlink-output >/dev/null 2>&1
+
 # Summary
 echo ""
 echo "=== Results ==="
