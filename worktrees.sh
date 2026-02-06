@@ -71,11 +71,13 @@ _sw_read_patterns() {
 # Args: patterns (one per arg)
 # Result: populates _sw_resolved array (dirs end with /)
 _sw_resolve_patterns() {
+    [[ -n "$ZSH_VERSION" ]] && setopt LOCAL_OPTIONS NO_XTRACE NO_VERBOSE
     _sw_resolved=()
-    local seen="" pattern
+    local seen="" pattern dir f gitignored_files file
+    local -a expanded_files
     for pattern in "$@"; do
         if [[ "$pattern" == */ ]]; then
-            local dir="${pattern%/}"
+            dir="${pattern%/}"
             case "$seen" in *"|$dir/|"*) continue ;; esac
             if [[ -d "$dir" ]] && \
                { git check-ignore -q "$dir" 2>/dev/null || \
@@ -84,15 +86,12 @@ _sw_resolve_patterns() {
                 _sw_resolved+=("$dir/")
             fi
         else
-            local expanded_files=()
-            local f
+            expanded_files=()
             for f in $pattern; do
                 [[ -f "$f" ]] && expanded_files+=("$f")
             done
             [[ ${#expanded_files[@]} -eq 0 ]] && continue
-            local gitignored_files
             gitignored_files=$(printf '%s\n' "${expanded_files[@]}" | git check-ignore --stdin 2>/dev/null)
-            local file
             while IFS= read -r file; do
                 [[ -z "$file" ]] && continue
                 case "$seen" in *"|$file|"*) continue ;; esac
