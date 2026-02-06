@@ -5,7 +5,7 @@
 #   # Sideways - git worktree helper
 #   source ~/path/to/worktrees.sh
 
-SW_VERSION="0.5.2"
+SW_VERSION="0.5.3"
 
 # =============================================================================
 # MODEL LAYER - Core business logic and state queries
