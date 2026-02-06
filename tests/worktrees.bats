@@ -752,7 +752,7 @@ EOF
     [ ! -d "$WT_DIR/feature-comments/build" ]
 }
 
-@test "sw add: outputs list of copied items" {
+@test "sw add: outputs per-line list of copied items" {
     # Create gitignore and files
     cat > .gitignore <<'EOF'
 .env
@@ -772,10 +772,11 @@ EOF
     run sw add feature-output
 
     [ "$status" -eq 0 ]
-    # Should list copied files in output
-    [[ "$output" == *"Copied:"* ]]
-    [[ "$output" == *".env"* ]]
-    [[ "$output" == *"CLAUDE.local.md"* ]]
+    # Should list each copied file on its own line with "copy" label
+    [[ "$output" == *"  copy  .env"* ]]
+    [[ "$output" == *"  copy  CLAUDE.local.md"* ]]
+    # Should NOT use old single-line "Copied:" format
+    [[ "$output" != *"Copied:"* ]]
 }
 
 @test "sw add: no output when nothing to copy" {
@@ -784,7 +785,23 @@ EOF
 
     [ "$status" -eq 0 ]
     # Should not mention copying
-    [[ "$output" != *"Copied:"* ]]
+    [[ "$output" != *"copy"*"."* ]]
+}
+
+@test "sw add: no debug/trace lines in output" {
+    echo ".env" > .gitignore
+    echo "SECRET=abc" > .env
+    git add .gitignore
+    git commit -m "Add gitignore"
+    echo ".env" > .swcopy
+
+    run sw add feature-no-trace
+
+    [ "$status" -eq 0 ]
+    # Should not contain variable assignment traces
+    [[ "$output" != *"f="* ]]
+    [[ "$output" != *"gitignored_files="* ]]
+    [[ "$output" != *"file="* ]]
 }
 
 @test "sw add -s: copies files before switching" {
@@ -1146,12 +1163,10 @@ EOF
     run sw add feature-symlink-output
 
     [ "$status" -eq 0 ]
-    # Should show copied files
-    [[ "$output" == *"Copied:"* ]]
-    [[ "$output" == *".env"* ]]
-    # Should show symlinked files
-    [[ "$output" == *"Symlinked:"* ]]
-    [[ "$output" == *"CLAUDE.local.md"* ]]
+    # Should show copied files with "copy" label
+    [[ "$output" == *"  copy  .env"* ]]
+    # Should show symlinked files with "link" label
+    [[ "$output" == *"  link  CLAUDE.local.md"* ]]
 }
 
 @test "sw add: .swsymlink without .swcopy does nothing" {

@@ -119,7 +119,8 @@ _sw_copy_gitignored() {
         shopt -s nullglob dotglob
         shopt -s globstar 2>/dev/null || true  # bash 4+ only; ** falls back to * on bash 3
     elif [[ -n "$ZSH_VERSION" ]]; then
-        setopt LOCAL_OPTIONS NULL_GLOB GLOB_DOTS GLOB_STAR_SHORT GLOB_SUBST NO_XTRACE NO_VERBOSE
+        setopt LOCAL_OPTIONS NO_XTRACE NO_VERBOSE NULL_GLOB GLOB_DOTS GLOB_SUBST
+        setopt GLOB_STAR_SHORT 2>/dev/null || true  # zsh 5.2+ only
     fi
 
     # Track processed items to avoid duplicates across overlapping patterns
@@ -199,15 +200,14 @@ _sw_copy_gitignored() {
     # Restore original directory
     cd "$original_dir" || true
 
-    # Output copied items
-    if [[ ${#copied[@]} -gt 0 ]]; then
-        echo "Copied: ${copied[*]}"
-    fi
-
-    # Output symlinked items
-    if [[ ${#symlinked[@]} -gt 0 ]]; then
-        echo "Symlinked: ${symlinked[*]}"
-    fi
+    # Output per-line list of copied and symlinked items
+    local item
+    for item in "${copied[@]}"; do
+        echo "  copy  $item"
+    done
+    for item in "${symlinked[@]}"; do
+        echo "  link  $item"
+    done
 }
 
 # =============================================================================

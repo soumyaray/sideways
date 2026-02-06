@@ -236,14 +236,31 @@ assert "nested symlink file: db.yml is symlink" test -L "$WT_DIR/nested-symfile/
 assert "nested symlink file: app.yml is regular file" test -f "$WT_DIR/nested-symfile/backend_app/config/app.yml" -a ! -L "$WT_DIR/nested-symfile/backend_app/config/app.yml"
 sw rm nested-symfile >/dev/null 2>&1
 
-# -- Symlink output reported --
+# -- Symlink output reported with "link" label --
 cd "$TEST_DIR/test-repo"
 echo "backend_app/config/" > .swcopy
 echo "backend_app/config/" > .swsymlink
 output=$(sw add symlink-output 2>&1)
 
-assert "symlink output mentions Symlinked:" test "${output[(I)Symlinked:*]}" -gt 0
+sym_output=false
+if [[ "$output" == *"  link  "* ]]; then
+    sym_output=true
+fi
+assert "symlink output shows '  link  ' label" $sym_output
 sw rm symlink-output >/dev/null 2>&1
+
+# -- Copy output reported with "copy" label --
+cd "$TEST_DIR/test-repo"
+echo "backend_app/config/*.yml" > .swcopy
+rm -f .swsymlink
+output=$(sw add copy-output 2>&1)
+
+copy_output=false
+if [[ "$output" == *"  copy  "* ]]; then
+    copy_output=true
+fi
+assert "copy output shows '  copy  ' label" $copy_output
+sw rm copy-output >/dev/null 2>&1
 
 # Summary
 echo ""
