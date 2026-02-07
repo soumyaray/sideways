@@ -1,6 +1,6 @@
 # Sideways - Git Worktree Helper
 
-A shell function (`sw`) for managing git [worktrees](#background) with sensible defaults.
+A shell function (`sw`) for managing git [worktrees](#background) with sensible defaults. Tested and used with both bash and zsh.
 
 ## Overview
 
@@ -31,7 +31,7 @@ Resulting directory structure:
 
 ### Why this over [other worktree tools](https://github.com/topics/git-worktree)?
 
-- **Zero dependencies** — pure shell (~230 lines), optional fzf for interactive selection
+- **Zero dependencies** — pure shell (~650 lines, single file), works with bash and zsh; optional fzf for interactive selection
 - **Workflow commands** — `sw rebase <branch>` (sync with any branch), `sw done` (cleanup and return to base)
 - **Editor integration** — `sw open` launches your editor directly in a worktree
 - **Gitignored file handling** — `.swcopy`/`.swsymlink` to copy or symlink env files and local configs to new worktrees
@@ -210,14 +210,17 @@ Both `.swcopy` and `.swsymlink` use the same format:
 
 ## Testing
 
-Tests use [bats-core](https://github.com/bats-core/bats-core):
+Unit tests use [bats-core](https://github.com/bats-core/bats-core). Zsh integration tests catch shell-specific issues (e.g., `$path` shadowing) that bash-based bats tests miss.
 
 ```bash
 # Install bats
 brew install bats-core  # macOS
 
-# Run tests
+# Run unit tests
 bats tests/worktrees.bats
+
+# Run zsh integration tests
+zsh tests/zsh-integration.zsh
 ```
 
 ## Background
