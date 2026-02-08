@@ -280,11 +280,31 @@ teardown() {
     [ -z "$output" ]
 }
 
-@test "sw rm: fails without branch name" {
+@test "sw rm: without fzf and no branch shows install message" {
+    # Temporarily hide fzf if it exists
+    local old_path="$PATH"
+    PATH="/usr/bin:/bin"
+
     run sw rm
 
+    PATH="$old_path"
+
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Usage: sw rm"* ]]
+    [[ "$output" == *"Interactive mode requires fzf"* ]]
+    [[ "$output" == *"sw rm [-d|-D] <branch-name>"* ]]
+}
+
+@test "sw rm: -d flag without fzf and no branch shows install message" {
+    local old_path="$PATH"
+    PATH="/usr/bin:/bin"
+
+    run sw rm -d
+
+    PATH="$old_path"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Interactive mode requires fzf"* ]]
+    [[ "$output" == *"sw rm [-d|-D] <branch-name>"* ]]
 }
 
 @test "sw rm: rejects unknown options" {
@@ -1344,30 +1364,41 @@ EOF
 # sw open
 # ============================================================================
 
-@test "sw open: opens current directory with VISUAL" {
+@test "sw open: without fzf and no branch shows install message" {
     export VISUAL="echo"
     unset EDITOR
 
+    local old_path="$PATH"
+    PATH="/usr/bin:/bin"
+
     run sw open
 
-    [ "$status" -eq 0 ]
-    [[ "$output" == "$TEST_DIR" ]]
+    PATH="$old_path"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Interactive mode requires fzf"* ]]
+    [[ "$output" == *"sw open [-e <editor>] <branch-name>"* ]]
 }
 
-@test "sw open: opens current directory with dot" {
+@test "sw open: dot without fzf shows install message" {
     export VISUAL="echo"
+
+    local old_path="$PATH"
+    PATH="/usr/bin:/bin"
 
     run sw open .
 
-    [ "$status" -eq 0 ]
-    [[ "$output" == "$TEST_DIR" ]]
+    PATH="$old_path"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Interactive mode requires fzf"* ]]
 }
 
 @test "sw open: falls back to EDITOR when VISUAL not set" {
     unset VISUAL
     export EDITOR="echo"
 
-    run sw open
+    run sw open main
 
     [ "$status" -eq 0 ]
     [[ "$output" == "$TEST_DIR" ]]
@@ -1377,7 +1408,7 @@ EOF
     export VISUAL="wrong"
     export EDITOR="wrong"
 
-    run sw open -e echo
+    run sw open -e echo main
 
     [ "$status" -eq 0 ]
     [[ "$output" == "$TEST_DIR" ]]
@@ -1386,7 +1417,7 @@ EOF
 @test "sw open: --editor flag works" {
     export VISUAL="wrong"
 
-    run sw open --editor echo
+    run sw open --editor echo main
 
     [ "$status" -eq 0 ]
     [[ "$output" == "$TEST_DIR" ]]
@@ -1395,7 +1426,7 @@ EOF
 @test "sw open: --editor=value syntax works" {
     export VISUAL="wrong"
 
-    run sw open --editor=echo
+    run sw open --editor=echo main
 
     [ "$status" -eq 0 ]
     [[ "$output" == "$TEST_DIR" ]]
@@ -1405,12 +1436,25 @@ EOF
     unset VISUAL
     unset EDITOR
 
-    run sw open
+    run sw open main
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"no editor configured"* ]]
     [[ "$output" == *"VISUAL"* ]]
     [[ "$output" == *"EDITOR"* ]]
+}
+
+@test "sw open: -e flag parsed before fzf fallback" {
+    local old_path="$PATH"
+    PATH="/usr/bin:/bin"
+
+    run sw open -e echo
+
+    PATH="$old_path"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Interactive mode requires fzf"* ]]
+    [[ "$output" == *"sw open [-e <editor>] <branch-name>"* ]]
 }
 
 @test "sw open: opens specific worktree from base" {

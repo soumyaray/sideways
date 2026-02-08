@@ -87,9 +87,10 @@ sw <command> [options]
 | `sw add -s <branch>`  | Create worktree and cd into it                     |
 | `sw add -o <branch>`  | Create worktree and open in editor                 |
 |                       |                                             |
-| `sw rm <branch>`      | Remove worktree (keep branch)               |
-| `sw rm -d <branch>`   | Remove worktree + delete branch (if merged) |
-| `sw rm -D <branch>`   | Remove worktree + force delete branch       |
+| `sw rm [branch]`      | Remove worktree (keep branch)               |
+| `sw rm -d [branch]`   | Remove worktree + delete branch (if merged) |
+| `sw rm -D [branch]`   | Remove worktree + force delete branch       |
+| `sw rm`               | Interactive selection via fzf               |
 |                       |                                             |
 | `sw prune`            | Remove stale worktree references            |
 
@@ -111,7 +112,7 @@ sw <command> [options]
 |                                |                                          |
 | `sw list` / `sw ls`            | List worktrees (* = current, [modified]) |
 | `sw info`                      | Show current branch, path, location      |
-| `sw open [-e <editor>] [branch]` | Open worktree in editor                |
+| `sw open [-e <editor>] [branch]` | Open worktree in editor (or interactive via fzf) |
 | `sw --help`                    | Show help                                |
 | `sw --version`                 | Show version                             |
 
@@ -122,7 +123,9 @@ sw <command> [options]
 sw add -s feature-login    # Create worktree and switch to it
 sw cd feature-login        # Switch to existing worktree
 sw cd                      # Interactive picker (requires fzf)
+sw open                    # Interactive picker to open in editor (requires fzf)
 sw rm feature-login        # Remove worktree (keep branch)
+sw rm                      # Interactive picker to remove (requires fzf)
 sw rm -D feature-login     # Remove worktree and force delete branch
 
 # From worktree: navigate and sync
@@ -206,7 +209,7 @@ Both `.swcopy` and `.swsymlink` use the same format:
 ## Dependencies
 
 - Git
-- fzf (optional, for interactive worktree selection)
+- fzf (optional, for interactive worktree selection in `cd`, `open`, and `rm`)
 
 ## Testing
 

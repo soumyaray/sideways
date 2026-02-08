@@ -241,6 +241,18 @@ _sw_error() {
     echo "sw: $*" >&2
 }
 
+# Suggest installing fzf for interactive mode
+_sw_no_fzf_error() {
+    echo "Interactive mode requires fzf. Install it with:" >&2
+    echo "  brew install fzf    # macOS" >&2
+    echo "  apt install fzf     # Debian/Ubuntu" >&2
+    echo "  winget install fzf  # Windows" >&2
+    if [[ -n "$1" ]]; then
+        echo "Or provide a branch name: $1" >&2
+    fi
+    return 1
+}
+
 # =============================================================================
 # CONTROLLER LAYER - Command handlers
 # =============================================================================
@@ -322,11 +334,7 @@ _sw_cmd_cd() {
         selected=$(git worktree list | fzf | awk '{print $1}')
         [[ -n "$selected" ]] && cd "$selected"
     else
-        echo "Interactive mode requires fzf. Install it with:" >&2
-        echo "  brew install fzf    # macOS" >&2
-        echo "  apt install fzf     # Debian/Ubuntu" >&2
-        echo "  winget install fzf  # Windows" >&2
-        echo "Or provide a branch name: sw cd <branch-name>" >&2
+        _sw_no_fzf_error "sw cd <branch-name>"
         return 1
     fi
 }
@@ -351,8 +359,15 @@ _sw_cmd_rm() {
 
     local branch="$1"
     if [[ -z "$branch" ]]; then
-        _sw_error "Usage: sw rm [-d|-D] <branch-name>"
-        return 1
+        if command -v fzf &>/dev/null; then
+            local selected
+            selected=$(git worktree list | awk -v base="$base_dir" '$1 != base' | fzf | awk '{print $1}')
+            [[ -z "$selected" ]] && return 0
+            branch=$(basename "$selected")
+        else
+            _sw_no_fzf_error "sw rm [-d|-D] <branch-name>"
+            return 1
+        fi
     fi
 
     local wt_path="$worktrees_dir_rel/$branch"
@@ -536,8 +551,15 @@ _sw_cmd_open() {
 
     # Resolve target directory
     if [[ -z "$target" || "$target" == "." ]]; then
-        # Current directory
-        target_dir=$(git rev-parse --show-toplevel)
+        if command -v fzf &>/dev/null; then
+            local selected
+            selected=$(git worktree list | fzf | awk '{print $1}')
+            [[ -z "$selected" ]] && return 0
+            target_dir="$selected"
+        else
+            _sw_no_fzf_error "sw open [-e <editor>] <branch-name>"
+            return 1
+        fi
     else
         # First check if it matches the base branch
         local base_branch
@@ -584,9 +606,10 @@ From base directory only:
                                -s, --switch: cd into worktree after creation
                                -o, --open: open worktree in editor
                                Copies/symlinks gitignored files (see below)
-  rm [-d|-D] <branch>          Remove worktree (branch kept by default)
+  rm [-d|-D] [branch]          Remove worktree (branch kept by default)
                                -d: also delete branch (if merged)
                                -D: also delete branch (force)
+                               No branch: interactive selection via fzf
   prune                        Remove stale worktree references
 
 From worktree subdirectory only:
@@ -598,7 +621,7 @@ Anywhere:
   cd [branch]                  Switch to worktree (or interactive via fzf)
   list, ls                     List all worktrees
   info                         Show current branch, path, location
-  open [-e <editor>] [branch]  Open worktree in editor ($VISUAL, $EDITOR, or -e)
+  open [-e <editor>] [branch]  Open worktree in editor (or interactive via fzf)
   --help, -h                   Show this help message
   --version, -V                Show version
 
