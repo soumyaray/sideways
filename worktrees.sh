@@ -253,6 +253,16 @@ _sw_no_fzf_error() {
     return 1
 }
 
+# Format worktree list for fzf with short display paths, output selected full path
+_sw_fzf_pick() {
+    while IFS= read -r line; do
+        local path="${line%% *}"
+        local rest="${line#* }"
+        local short="../$(basename "$path")"
+        printf '%s|%s %s\n' "$path" "$short" "$rest"
+    done | fzf --delimiter='|' --with-nth=2 | cut -d'|' -f1
+}
+
 # =============================================================================
 # CONTROLLER LAYER - Command handlers
 # =============================================================================
@@ -331,7 +341,7 @@ _sw_cmd_cd() {
         cd "$worktrees_dir_abs/$branch"
     elif command -v fzf &>/dev/null; then
         local selected
-        selected=$(git worktree list | fzf | awk '{print $1}')
+        selected=$(git worktree list | _sw_fzf_pick)
         [[ -n "$selected" ]] && cd "$selected"
     else
         _sw_no_fzf_error "sw cd <branch-name>"
@@ -361,7 +371,7 @@ _sw_cmd_rm() {
     if [[ -z "$branch" ]]; then
         if command -v fzf &>/dev/null; then
             local selected
-            selected=$(git worktree list | awk -v base="$base_dir" '$1 != base' | fzf | awk '{print $1}')
+            selected=$(git worktree list | awk -v base="$base_dir" '$1 != base' | _sw_fzf_pick)
             [[ -z "$selected" ]] && return 0
             branch=$(basename "$selected")
         else
@@ -553,7 +563,7 @@ _sw_cmd_open() {
     if [[ -z "$target" || "$target" == "." ]]; then
         if command -v fzf &>/dev/null; then
             local selected
-            selected=$(git worktree list | fzf | awk '{print $1}')
+            selected=$(git worktree list | _sw_fzf_pick)
             [[ -z "$selected" ]] && return 0
             target_dir="$selected"
         else

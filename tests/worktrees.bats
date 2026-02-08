@@ -173,6 +173,30 @@ teardown() {
     [[ "$output" == *"Interactive mode requires fzf"* ]]
 }
 
+@test "sw cd: fzf picker shows short paths and returns full path" {
+    sw add feature-pick
+
+    # Create a mock fzf that selects the first entry
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<'MOCK'
+#!/usr/bin/env bash
+head -1
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    sw cd
+
+    PATH="$old_path"
+    rm -rf "$mock_dir"
+
+    # The mock picks the first worktree (the base dir); verify we landed there
+    [[ "$PWD" == "$TEST_DIR" ]]
+}
+
 @test "sw cd: works from inside a worktree" {
     sw add feature-one
     sw add -s feature-two
@@ -292,6 +316,31 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"Interactive mode requires fzf"* ]]
     [[ "$output" == *"sw rm [-d|-D] <branch-name>"* ]]
+}
+
+@test "sw rm: fzf picker shows short paths and removes selected worktree" {
+    sw add feature-rm-pick
+
+    # Create a mock fzf that selects the first entry (base is excluded, so this picks the worktree)
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<'MOCK'
+#!/usr/bin/env bash
+head -1
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    run sw rm
+
+    PATH="$old_path"
+    rm -rf "$mock_dir"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+    [ ! -d "$WT_DIR/feature-rm-pick" ]
 }
 
 @test "sw rm: -d flag without fzf and no branch shows install message" {
@@ -1442,6 +1491,32 @@ EOF
     [[ "$output" == *"no editor configured"* ]]
     [[ "$output" == *"VISUAL"* ]]
     [[ "$output" == *"EDITOR"* ]]
+}
+
+@test "sw open: fzf picker shows short paths and opens selected worktree" {
+    sw add feature-open-pick
+    export VISUAL="echo"
+
+    # Create a mock fzf that selects the first entry
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<'MOCK'
+#!/usr/bin/env bash
+head -1
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    run sw open
+
+    PATH="$old_path"
+    rm -rf "$mock_dir"
+
+    [ "$status" -eq 0 ]
+    # VISUAL=echo prints the path it was given; mock picks first worktree (base dir)
+    [[ "$output" == *"$TEST_DIR"* ]]
 }
 
 @test "sw open: -e flag parsed before fzf fallback" {
