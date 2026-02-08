@@ -327,6 +327,44 @@ assert "symlink stdout clean with XTRACE enabled" $sym_stdout_ok
 sw rm xtrace-symout >/dev/null 2>&1
 
 echo ""
+echo "--- _sw_fzf_pick variable shadowing (zsh-specific) ---"
+
+# _sw_fzf_pick uses local variables that must not shadow zsh specials (e.g., $path)
+# Feed it fake worktree list lines and use head -1 as a fzf stand-in
+cd "$TEST_DIR/test-repo"
+sw add pick-test >/dev/null 2>&1
+
+# Capture git worktree list output, pipe through the transform loop only (no fzf)
+pick_output=$(git worktree list | while IFS= read -r line; do
+    local wt_path="${line%% *}"
+    local rest="${line#* }"
+    local short="../$(basename "$wt_path")"
+    printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
+done)
+
+pick_ok=true
+if [[ "$pick_output" == *"command not found"* ]] || [[ "$pick_output" == *"inconsistent type"* ]]; then
+    pick_ok=false
+    echo "  Error in _sw_fzf_pick transform: $pick_output"
+fi
+# Verify short paths appear in output
+if [[ "$pick_output" != *"../"* ]]; then
+    pick_ok=false
+    echo "  No short paths found in output: $pick_output"
+fi
+assert "_sw_fzf_pick transform works without \$path shadowing" $pick_ok
+
+# Verify full path is extractable via cut
+first_full=$(echo "$pick_output" | head -1 | cut -d'|' -f1)
+if [[ "$first_full" != /* ]]; then
+    assert "_sw_fzf_pick returns full absolute path" false
+else
+    assert "_sw_fzf_pick returns full absolute path" true
+fi
+
+sw rm pick-test >/dev/null 2>&1
+
+echo ""
 echo "--- .swsymlink Nested Patterns (zsh-specific) ---"
 
 # -- Nested directory symlink --

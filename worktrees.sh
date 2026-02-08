@@ -256,10 +256,10 @@ _sw_no_fzf_error() {
 # Format worktree list for fzf with short display paths, output selected full path
 _sw_fzf_pick() {
     while IFS= read -r line; do
-        local path="${line%% *}"
+        local wt_path="${line%% *}"
         local rest="${line#* }"
-        local short="../$(basename "$path")"
-        printf '%s|%s %s\n' "$path" "$short" "$rest"
+        local short="../$(basename "$wt_path")"
+        printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
     done | fzf --delimiter='|' --with-nth=2 | cut -d'|' -f1
 }
 
