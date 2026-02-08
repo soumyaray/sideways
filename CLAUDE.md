@@ -103,3 +103,4 @@ See [ROADMAP.md](ROADMAP.md) for planned features and refactoring opportunities.
 ## Caveats
 
 - **Don't use `sw` commands in Claude sessions** — editors won't follow directory changes from `sw cd`, `sw add -s`, etc. Use git commands directly.
+- **Zsh reserved variable names** — In zsh, `$path` is a special array tied to `$PATH`. Using `local path=...` in a function will shadow it and break command resolution (`command not found`). Other zsh-reserved names to avoid: `$path`, `$status`, `$prompt`, `$signals`, `$commands`, `$functions`, `$history`, `$dirstack`, `$pipestatus`. Always use prefixed names like `wt_path` instead. This bug has occurred twice — always add a zsh integration test when introducing new local variables.
