@@ -409,7 +409,7 @@ _sw_cmd_rm() {
         git worktree prune
         _sw_cleanup_empty_parents "$wt_abs_path" "$worktrees_dir_abs"
         if [[ -n "$delete_flag" ]]; then
-            if git branch "$delete_flag" "$branch" 2>/dev/null; then
+            if git branch "$delete_flag" "$branch" >/dev/null 2>&1; then
                 echo "Deleted branch: $branch"
             else
                 echo "Branch $branch not fully merged. Use -D to force delete." >&2
@@ -432,7 +432,7 @@ _sw_cmd_rm() {
     echo "Removed worktree: $wt_path"
 
     if [[ -n "$delete_flag" ]]; then
-        if git branch "$delete_flag" "$branch" 2>/dev/null; then
+        if git branch "$delete_flag" "$branch" >/dev/null 2>&1; then
             echo "Deleted branch: $branch"
         else
             echo "Branch $branch not fully merged. Use -D to force delete." >&2
