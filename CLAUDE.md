@@ -28,11 +28,11 @@ A shell function (`sw`) for managing git worktrees. See `sw --help` or `README.m
 
 ## Testing
 
-**Unit tests** (73 tests using bats-core):
+**Unit tests** (106 tests using bats-core):
 
 ```bash
-brew install bats-core  # if needed
-bats tests/worktrees.bats
+brew install bats-core parallel  # if needed
+bats -j 10 tests/worktrees.bats
 ```
 
 Tests cover: add, cd, rm, list, prune, base, info, rebase, done, open, help, and error cases.
@@ -63,7 +63,7 @@ These tests run in actual zsh and catch issues that bash-based bats tests miss.
 ### Pre-release Checklist
 
 1. All changes committed and pushed to `main`
-2. Tests pass: `bats tests/worktrees.bats` and `zsh tests/zsh-integration.zsh`
+2. Tests pass: `bats -j 10 tests/worktrees.bats` and `zsh tests/zsh-integration.zsh`
 3. `../homebrew-sideways` repo exists and is on `main`
 
 ### Release Process
