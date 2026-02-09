@@ -1693,3 +1693,75 @@ MOCK
     [ -d "$WT_DIR/joe/feature-fzf-rm" ] && ((remaining++))
     [ "$remaining" -eq 1 ]
 }
+
+@test "sw rm -d: fzf removes worktree and deletes slashed branch" {
+    sw add ray/feature-fzf-rmd
+    # Make the branch "merged" by not adding any commits
+
+    # Create a mock fzf that selects the first entry
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<'MOCK'
+#!/usr/bin/env bash
+head -1
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    run sw rm -d
+
+    PATH="$old_path"
+    rm -rf "$mock_dir"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+    [[ "$output" == *"Deleted branch:"* ]]
+
+    # Verify worktree is gone
+    [ ! -d "$WT_DIR/ray/feature-fzf-rmd" ]
+
+    # Verify branch is gone
+    run git branch --list ray/feature-fzf-rmd
+    [ -z "$output" ]
+}
+
+@test "sw rm -d: handles stale worktree (directory already removed)" {
+    sw add ray/stale-wt
+
+    # Simulate a stale worktree: manually delete directory without git worktree remove
+    rm -rf "$WT_DIR/ray/stale-wt"
+
+    run sw rm -d ray/stale-wt
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already removed"* ]]
+    [[ "$output" == *"Deleted branch:"* ]]
+
+    # Verify branch is gone
+    run git branch --list ray/stale-wt
+    [ -z "$output" ]
+
+    # Verify stale reference is cleaned up
+    run git worktree list
+    [[ "$output" != *"stale-wt"* ]]
+}
+
+@test "sw rm: handles stale worktree without branch deletion" {
+    sw add ray/stale-no-delete
+
+    # Simulate a stale worktree
+    rm -rf "$WT_DIR/ray/stale-no-delete"
+
+    run sw rm ray/stale-no-delete
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already removed"* ]]
+    # Should NOT delete branch (no -d flag)
+    [[ "$output" != *"Deleted branch:"* ]]
+
+    # Branch should still exist
+    run git branch --list ray/stale-no-delete
+    [[ "$output" == *"ray/stale-no-delete"* ]]
+}

@@ -403,6 +403,21 @@ _sw_cmd_rm() {
     local wt_path="$worktrees_dir_rel/$branch"
     local wt_abs_path="$worktrees_dir_abs/$branch"
 
+    # Handle stale worktree (directory already removed but git metadata remains)
+    if [[ ! -d "$wt_abs_path" ]]; then
+        echo "Worktree directory already removed, cleaning up stale reference..."
+        git worktree prune
+        _sw_cleanup_empty_parents "$wt_abs_path" "$worktrees_dir_abs"
+        if [[ -n "$delete_flag" ]]; then
+            if git branch "$delete_flag" "$branch" 2>/dev/null; then
+                echo "Deleted branch: $branch"
+            else
+                echo "Branch $branch not fully merged. Use -D to force delete." >&2
+            fi
+        fi
+        return 0
+    fi
+
     # Guard: check for uncommitted changes
     if _sw_has_uncommitted_changes "$wt_abs_path"; then
         _sw_error "worktree '$branch' has uncommitted changes"
