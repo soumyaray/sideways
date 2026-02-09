@@ -75,27 +75,27 @@ echo "--- Core Commands ---"
 # These tests specifically check that git commands work after local variable declarations
 # The $path shadowing bug would cause "command not found: git" errors
 
-run_test "sw add creates worktree" "sw add test-branch"
+run_test "sw add creates worktree" "sw add ray/test-branch"
 run_test "sw list works" "sw list"
 run_test "sw info works" "sw info"
-run_test "sw rm removes worktree" "sw rm test-branch"
+run_test "sw rm removes worktree" "sw rm ray/test-branch"
 run_test "sw prune works" "sw prune"
 
 # Test with options (exercises the while loop + local var combination)
 echo ""
 echo "--- Commands with Options (where bug occurred) ---"
 
-run_test "sw add -s works" "sw add -s opt-branch; cd '$TEST_DIR/test-repo'"
-run_test "sw rm -d works" "sw rm -d opt-branch"
+run_test "sw add -s works" "sw add -s ray/opt-branch; cd '$TEST_DIR/test-repo'"
+run_test "sw rm -d works" "sw rm -d ray/opt-branch"
 
 # Test multiple operations in sequence
 echo ""
 echo "--- Sequential Operations ---"
 
-run_test "sw add branch-1" "sw add branch-1"
-run_test "sw add branch-2" "sw add branch-2"
-run_test "sw rm branch-1" "sw rm branch-1"
-run_test "sw rm -D branch-2" "sw rm -D branch-2"
+run_test "sw add ray/branch-1" "sw add ray/branch-1"
+run_test "sw add ray/branch-2" "sw add ray/branch-2"
+run_test "sw rm ray/branch-1" "sw rm ray/branch-1"
+run_test "sw rm -D ray/branch-2" "sw rm -D ray/branch-2"
 
 # ==========================================================================
 # .swcopy glob expansion tests (zsh-specific)
@@ -332,7 +332,7 @@ echo "--- _sw_fzf_pick variable shadowing (zsh-specific) ---"
 # _sw_fzf_pick uses local variables that must not shadow zsh specials (e.g., $path)
 # Feed it fake worktree list lines and use head -1 as a fzf stand-in
 cd "$TEST_DIR/test-repo"
-sw add pick-test >/dev/null 2>&1
+sw add ray/pick-test >/dev/null 2>&1
 
 # Capture git worktree list output, pipe through the transform loop only (no fzf)
 pick_output=$(git worktree list | while IFS= read -r line; do
@@ -362,7 +362,7 @@ else
     assert "_sw_fzf_pick returns full absolute path" true
 fi
 
-sw rm pick-test >/dev/null 2>&1
+sw rm ray/pick-test >/dev/null 2>&1
 
 echo ""
 echo "--- .swsymlink Nested Patterns (zsh-specific) ---"
@@ -417,6 +417,58 @@ if [[ "$output" == *"  copy  "* ]]; then
 fi
 assert "copy output shows '  copy  ' label" $copy_output
 sw rm copy-output >/dev/null 2>&1
+
+# ==========================================================================
+# Slashed branch names (zsh-specific)
+# ==========================================================================
+
+echo ""
+echo "--- Slashed Branch Names (zsh-specific) ---"
+
+# -- _sw_fzf_pick display with slashed branch --
+cd "$TEST_DIR/test-repo"
+sw add ray/zsh-pick >/dev/null 2>&1
+
+pick_slash_output=$(git worktree list | while IFS= read -r line; do
+    local wt_path="${line%% *}"
+    local rest="${line#* }"
+    local short="../$(basename "$wt_path")"
+    printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
+done)
+
+# Extract just the short path (first word after |) from each line
+# BUG: basename strips "ray/" prefix, showing "../zsh-pick" instead of "../ray/zsh-pick"
+pick_slash_short=$(echo "$pick_slash_output" | cut -d'|' -f2 | awk '{print $1}')
+slash_display_ok=false
+if [[ "$pick_slash_short" == *"../ray/zsh-pick"* ]]; then
+    slash_display_ok=true
+fi
+assert "_sw_fzf_pick shows slashed branch (../ray/zsh-pick not ../zsh-pick)" $slash_display_ok
+
+# Verify full path still extractable
+slash_full=$(echo "$pick_slash_output" | grep "ray/zsh-pick" | cut -d'|' -f1)
+if [[ "$slash_full" == *"ray/zsh-pick" ]]; then
+    assert "_sw_fzf_pick slashed branch: full path extractable" true
+else
+    assert "_sw_fzf_pick slashed branch: full path extractable" false
+fi
+
+sw rm ray/zsh-pick >/dev/null 2>&1
+
+# -- Empty prefix directory cleanup --
+cd "$TEST_DIR/test-repo"
+sw add ray/zsh-clean >/dev/null 2>&1
+assert "slashed worktree created" test -d "$WT_DIR/ray/zsh-clean"
+
+sw rm ray/zsh-clean >/dev/null 2>&1
+assert "slashed worktree removed" test ! -d "$WT_DIR/ray/zsh-clean"
+
+# After removing last ray/* worktree, the ray/ directory should be cleaned up
+slash_cleanup_ok=true
+if [[ -d "$WT_DIR/ray" ]]; then
+    slash_cleanup_ok=false
+fi
+assert "empty prefix dir cleaned up after rm" $slash_cleanup_ok
 
 # Summary
 echo ""

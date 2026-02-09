@@ -48,17 +48,17 @@ teardown() {
 # ============================================================================
 
 @test "sw add: creates worktree with new branch" {
-    run sw add feature-test
+    run sw add ray/feature-test
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"(new branch feature-test)"* ]]
+    [[ "$output" == *"(new branch ray/feature-test)"* ]]
 
     # Verify worktree exists
-    [ -d "$WT_DIR/feature-test" ]
+    [ -d "$WT_DIR/ray/feature-test" ]
 
     # Verify branch exists
-    run git branch --list feature-test
-    [[ "$output" == *"feature-test"* ]]
+    run git branch --list ray/feature-test
+    [[ "$output" == *"ray/feature-test"* ]]
 }
 
 @test "sw add: fails without branch name" {
@@ -69,20 +69,20 @@ teardown() {
 }
 
 @test "sw add -s: creates worktree and switches to it" {
-    sw add -s feature-switch
+    sw add -s ray/feature-switch
 
     # Verify we're now in the worktree directory
-    [[ "$PWD" == *"-worktrees/feature-switch" ]]
+    [[ "$PWD" == *"-worktrees/ray/feature-switch" ]]
 
     # Verify we're on the correct branch
     run git branch --show-current
-    [ "$output" = "feature-switch" ]
+    [ "$output" = "ray/feature-switch" ]
 }
 
 @test "sw add --switch: long form works" {
-    sw add --switch feature-long
+    sw add --switch ray/feature-long
 
-    [[ "$PWD" == *"-worktrees/feature-long" ]]
+    [[ "$PWD" == *"-worktrees/ray/feature-long" ]]
 }
 
 @test "sw add: rejects unknown options" {
@@ -93,57 +93,57 @@ teardown() {
 }
 
 @test "sw add: creates multiple worktrees" {
-    run sw add feature-one
+    run sw add ray/feature-one
     [ "$status" -eq 0 ]
 
-    run sw add feature-two
+    run sw add ray/feature-two
     [ "$status" -eq 0 ]
 
-    [ -d "$WT_DIR/feature-one" ]
-    [ -d "$WT_DIR/feature-two" ]
+    [ -d "$WT_DIR/ray/feature-one" ]
+    [ -d "$WT_DIR/ray/feature-two" ]
 }
 
 @test "sw add -o: creates worktree and opens in editor" {
     export VISUAL="echo"
 
-    run sw add -o feature-open
+    run sw add -o ray/feature-open
 
     [ "$status" -eq 0 ]
-    [ -d "$WT_DIR/feature-open" ]
+    [ -d "$WT_DIR/ray/feature-open" ]
     # Editor (echo) should output the worktree path
-    [[ "$output" == *"$WT_DIR/feature-open"* ]]
+    [[ "$output" == *"$WT_DIR/ray/feature-open"* ]]
 }
 
 @test "sw add -so: creates, switches, and opens" {
     export VISUAL="echo"
 
-    sw add -so feature-combo
+    sw add -so ray/feature-combo
 
     # Should be in the worktree
-    [[ "$PWD" == *"-worktrees/feature-combo" ]]
+    [[ "$PWD" == *"-worktrees/ray/feature-combo" ]]
     # Worktree should exist
-    [ -d "$WT_DIR/feature-combo" ]
+    [ -d "$WT_DIR/ray/feature-combo" ]
 }
 
 @test "sw add -o: warns but succeeds when no editor configured" {
     unset VISUAL
     unset EDITOR
 
-    run sw add -o feature-no-editor
+    run sw add -o ray/feature-no-editor
 
     [ "$status" -eq 0 ]
     # Worktree should still be created
-    [ -d "$WT_DIR/feature-no-editor" ]
+    [ -d "$WT_DIR/ray/feature-no-editor" ]
     # Should warn about no editor
     [[ "$output" == *"Warning: cannot open"* ]]
     [[ "$output" == *"no editor configured"* ]]
 }
 
 @test "sw add -o: fails from inside a worktree" {
-    sw add -s feature-nested
+    sw add -s ray/feature-nested
     export VISUAL="echo"
 
-    run sw add -o another-branch
+    run sw add -o ray/another-branch
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"must be run from base directory"* ]]
@@ -154,10 +154,10 @@ teardown() {
 # ============================================================================
 
 @test "sw cd: changes to existing worktree" {
-    sw add feature-cd
-    sw cd feature-cd
+    sw add ray/feature-cd
+    sw cd ray/feature-cd
 
-    [[ "$PWD" == *"-worktrees/feature-cd" ]]
+    [[ "$PWD" == *"-worktrees/ray/feature-cd" ]]
 }
 
 @test "sw cd: without fzf and no branch shows install message" {
@@ -174,7 +174,7 @@ teardown() {
 }
 
 @test "sw cd: fzf picker shows short paths and returns full path" {
-    sw add feature-pick
+    sw add ray/feature-pick
 
     # Create a mock fzf that selects the first entry
     local mock_dir
@@ -198,16 +198,16 @@ MOCK
 }
 
 @test "sw cd: works from inside a worktree" {
-    sw add feature-one
-    sw add -s feature-two
-    # Now we're in feature-two worktree
+    sw add ray/feature-one
+    sw add -s ray/feature-two
+    # Now we're in ray/feature-two worktree
 
-    sw cd feature-one
-    # Should be in feature-one worktree
+    sw cd ray/feature-one
+    # Should be in ray/feature-one worktree
 
-    [[ "$PWD" == *"-worktrees/feature-one" ]]
+    [[ "$PWD" == *"-worktrees/ray/feature-one" ]]
     run git branch --show-current
-    [ "$output" = "feature-one" ]
+    [ "$output" = "ray/feature-one" ]
 }
 
 # ============================================================================
@@ -215,46 +215,46 @@ MOCK
 # ============================================================================
 
 @test "sw rm: removes worktree but keeps branch" {
-    sw add feature-remove
+    sw add ray/feature-remove
 
     # Verify it exists first
-    [ -d "$WT_DIR/feature-remove" ]
+    [ -d "$WT_DIR/ray/feature-remove" ]
 
-    run sw rm feature-remove
+    run sw rm ray/feature-remove
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Removed worktree:"* ]]
 
     # Verify worktree is gone
-    [ ! -d "$WT_DIR/feature-remove" ]
+    [ ! -d "$WT_DIR/ray/feature-remove" ]
 
     # Verify branch still exists
-    run git branch --list feature-remove
-    [[ "$output" == *"feature-remove"* ]]
+    run git branch --list ray/feature-remove
+    [[ "$output" == *"ray/feature-remove"* ]]
 }
 
 @test "sw rm -d: removes worktree and deletes merged branch" {
-    sw add feature-merged
+    sw add ray/feature-merged
 
     # Make the branch "merged" by not adding any commits
     # (it's at same point as main, so -d will work)
 
-    run sw rm -d feature-merged
+    run sw rm -d ray/feature-merged
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Removed worktree:"* ]]
     [[ "$output" == *"Deleted branch:"* ]]
 
     # Verify worktree is gone
-    [ ! -d "$WT_DIR/feature-merged" ]
+    [ ! -d "$WT_DIR/ray/feature-merged" ]
 
     # Verify branch is gone
-    run git branch --list feature-merged
+    run git branch --list ray/feature-merged
     [ -z "$output" ]
 }
 
 @test "sw rm -d: removes worktree but fails to delete unmerged branch" {
-    sw add -s feature-unmerged
+    sw add -s ray/feature-unmerged
 
     # Add a commit so the branch is not merged
     echo "unmerged change" > unmerged.txt
@@ -264,7 +264,7 @@ MOCK
     # Go back to base
     sw base
 
-    run sw rm -d feature-unmerged
+    run sw rm -d ray/feature-unmerged
 
     # Command succeeds (worktree removed) but branch deletion fails
     [ "$status" -eq 0 ]
@@ -272,15 +272,15 @@ MOCK
     [[ "$output" == *"not fully merged"* ]]
 
     # Verify worktree is gone
-    [ ! -d "$WT_DIR/feature-unmerged" ]
+    [ ! -d "$WT_DIR/ray/feature-unmerged" ]
 
     # Verify branch still exists (deletion failed)
-    run git branch --list feature-unmerged
-    [[ "$output" == *"feature-unmerged"* ]]
+    run git branch --list ray/feature-unmerged
+    [[ "$output" == *"ray/feature-unmerged"* ]]
 }
 
 @test "sw rm -D: removes worktree and force deletes unmerged branch" {
-    sw add -s feature-force
+    sw add -s ray/feature-force
 
     # Add a commit so the branch is not merged
     echo "force delete change" > force.txt
@@ -290,17 +290,17 @@ MOCK
     # Go back to base
     sw base
 
-    run sw rm -D feature-force
+    run sw rm -D ray/feature-force
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Removed worktree:"* ]]
     [[ "$output" == *"Deleted branch:"* ]]
 
     # Verify worktree is gone
-    [ ! -d "$WT_DIR/feature-force" ]
+    [ ! -d "$WT_DIR/ray/feature-force" ]
 
     # Verify branch is gone (force deleted)
-    run git branch --list feature-force
+    run git branch --list ray/feature-force
     [ -z "$output" ]
 }
 
@@ -319,7 +319,7 @@ MOCK
 }
 
 @test "sw rm: fzf picker shows short paths and removes selected worktree" {
-    sw add feature-rm-pick
+    sw add ray/feature-rm-pick
 
     # Create a mock fzf that selects the first entry (base is excluded, so this picks the worktree)
     local mock_dir
@@ -340,7 +340,7 @@ MOCK
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Removed worktree:"* ]]
-    [ ! -d "$WT_DIR/feature-rm-pick" ]
+    [ ! -d "$WT_DIR/ray/feature-rm-pick" ]
 }
 
 @test "sw rm: -d flag without fzf and no branch shows install message" {
@@ -379,45 +379,45 @@ MOCK
 }
 
 @test "sw ls: alias works" {
-    sw add feature-ls
+    sw add ray/feature-ls
 
     run sw ls
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"feature-ls"* ]]
+    [[ "$output" == *"ray/feature-ls"* ]]
 }
 
 @test "sw list: shows multiple worktrees" {
-    sw add feature-a
-    sw add feature-b
+    sw add ray/feature-a
+    sw add ray/feature-b
 
     run sw list
 
-    [[ "$output" == *"feature-a"* ]]
-    [[ "$output" == *"feature-b"* ]]
+    [[ "$output" == *"ray/feature-a"* ]]
+    [[ "$output" == *"ray/feature-b"* ]]
 }
 
 @test "sw list: shows current worktree indicator" {
-    sw add -s feature-current
+    sw add -s ray/feature-current
     # Now in the worktree
-    [[ "$PWD" == *"-worktrees/feature-current" ]]
+    [[ "$PWD" == *"-worktrees/ray/feature-current" ]]
 
     run sw list
 
     # Current worktree should have asterisk marker (* <space> commit <tab> location <tab> branch)
-    [[ "$output" == *"* "*"feature-current"* ]]
+    [[ "$output" == *"* "*"ray/feature-current"* ]]
     # Base should not have asterisk (space instead, so two spaces before commit)
     [[ "$output" == *"  "*"main"* ]]
 }
 
 @test "sw list: shows modified status" {
-    sw add -s feature-dirty
+    sw add -s ray/feature-dirty
     # Make uncommitted changes in the worktree
     echo "dirty" >> README.md
 
     run sw list
 
-    [[ "$output" == *"feature-dirty"*"[modified]"* ]]
+    [[ "$output" == *"ray/feature-dirty"*"[modified]"* ]]
 }
 
 # ============================================================================
@@ -432,10 +432,10 @@ MOCK
 }
 
 @test "sw prune: cleans stale references" {
-    sw add feature-stale
+    sw add ray/feature-stale
 
     # Manually remove the directory without using git worktree remove
-    rm -rf "$WT_DIR/feature-stale"
+    rm -rf "$WT_DIR/ray/feature-stale"
 
     # Now prune should clean it up
     run sw prune
@@ -444,7 +444,7 @@ MOCK
 
     # Verify it's no longer listed
     run git worktree list
-    [[ "$output" != *"feature-stale"* ]]
+    [[ "$output" != *"ray/feature-stale"* ]]
 }
 
 # ============================================================================
@@ -508,48 +508,48 @@ MOCK
 
 @test "sw add: uses existing branch" {
     # Create a branch without a worktree
-    git branch feature-existing
+    git branch ray/feature-existing
 
-    run sw add feature-existing
+    run sw add ray/feature-existing
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"(existing branch feature-existing)"* ]]
-    [ -d "$WT_DIR/feature-existing" ]
+    [[ "$output" == *"(existing branch ray/feature-existing)"* ]]
+    [ -d "$WT_DIR/ray/feature-existing" ]
 }
 
 @test "sw add: fails if worktree already exists" {
-    sw add feature-dup
+    sw add ray/feature-dup
 
-    run sw add feature-dup
+    run sw add ray/feature-dup
 
     [ "$status" -ne 0 ]
 }
 
 @test "sw add: fails from inside a worktree" {
-    sw add -s feature-nested
+    sw add -s ray/feature-nested
 
-    run sw add another-branch
+    run sw add ray/another-branch
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"must be run from base directory"* ]]
 }
 
 @test "sw rm: fails from inside a worktree" {
-    sw add feature-rm-test
-    sw add -s feature-in-wt
+    sw add ray/feature-rm-test
+    sw add -s ray/feature-in-wt
 
-    run sw rm feature-rm-test
+    run sw rm ray/feature-rm-test
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"must be run from base directory"* ]]
 }
 
 @test "sw rm: fails with uncommitted changes" {
-    sw add feature-dirty-rm
+    sw add ray/feature-dirty-rm
     # Make uncommitted changes in the worktree
-    echo "dirty" >> "$TEST_DIR/../$(basename "$TEST_DIR")-worktrees/feature-dirty-rm/README.md"
+    echo "dirty" >> "$TEST_DIR/../$(basename "$TEST_DIR")-worktrees/ray/feature-dirty-rm/README.md"
 
-    run sw rm feature-dirty-rm
+    run sw rm ray/feature-dirty-rm
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"uncommitted changes"* ]]
@@ -560,9 +560,9 @@ MOCK
 # ============================================================================
 
 @test "sw base: jumps to base from worktree" {
-    sw add -s feature-base
+    sw add -s ray/feature-base
     # Now we're in the worktree
-    [[ "$PWD" == *"-worktrees/feature-base" ]]
+    [[ "$PWD" == *"-worktrees/ray/feature-base" ]]
 
     sw base
 
@@ -591,12 +591,12 @@ MOCK
 }
 
 @test "sw info: shows info when in worktree" {
-    sw add -s feature-info
+    sw add -s ray/feature-info
 
     run sw info
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Branch:   feature-info"* ]]
+    [[ "$output" == *"Branch:   ray/feature-info"* ]]
     [[ "$output" == *"Location: worktree"* ]]
 }
 
@@ -612,6 +612,8 @@ MOCK
 }
 
 @test "sw rebase: fails without remote" {
+    sw add -s ray/feature-rebase
+
     # No remote configured in test repo
     run sw rebase main
 
@@ -623,9 +625,9 @@ MOCK
 # ============================================================================
 
 @test "sw done: removes worktree and keeps branch" {
-    sw add -s feature-done
+    sw add -s ray/feature-done
     # Now we're in the worktree
-    [[ "$PWD" == *"-worktrees/feature-done" ]]
+    [[ "$PWD" == *"-worktrees/ray/feature-done" ]]
 
     sw done
 
@@ -633,11 +635,11 @@ MOCK
     [[ "$PWD" == "$TEST_DIR" ]]
 
     # Worktree should be gone
-    [ ! -d "$WT_DIR/feature-done" ]
+    [ ! -d "$WT_DIR/ray/feature-done" ]
 
     # Branch should still exist
-    run git branch --list feature-done
-    [[ "$output" == *"feature-done"* ]]
+    run git branch --list ray/feature-done
+    [[ "$output" == *"ray/feature-done"* ]]
 }
 
 @test "sw done: fails when in base" {
@@ -648,7 +650,7 @@ MOCK
 }
 
 @test "sw done: fails with uncommitted changes" {
-    sw add -s feature-dirty-done
+    sw add -s ray/feature-dirty-done
     # Make uncommitted changes
     echo "dirty" >> README.md
 
@@ -686,12 +688,12 @@ MOCK
     # Create .swcopy to include .env
     echo ".env" > .swcopy
 
-    run sw add feature-copy
+    run sw add ray/feature-copy
 
     [ "$status" -eq 0 ]
     # Verify the gitignored file was copied
-    [ -f "$WT_DIR/feature-copy/.env" ]
-    [[ "$(cat "$WT_DIR/feature-copy/.env")" == "SECRET=abc123" ]]
+    [ -f "$WT_DIR/ray/feature-copy/.env" ]
+    [[ "$(cat "$WT_DIR/ray/feature-copy/.env")" == "SECRET=abc123" ]]
 }
 
 @test "sw add: copies multiple files from .swcopy" {
@@ -1148,16 +1150,16 @@ EOF
     echo ".env" > .swcopy
     echo "CLAUDE.local.md" > .swsymlink
 
-    run sw add feature-symlink
+    run sw add ray/feature-symlink
 
     [ "$status" -eq 0 ]
     # .env should be copied (regular file)
-    [ -f "$WT_DIR/feature-symlink/.env" ]
-    [ ! -L "$WT_DIR/feature-symlink/.env" ]
+    [ -f "$WT_DIR/ray/feature-symlink/.env" ]
+    [ ! -L "$WT_DIR/ray/feature-symlink/.env" ]
     # CLAUDE.local.md should be a symlink
-    [ -L "$WT_DIR/feature-symlink/CLAUDE.local.md" ]
+    [ -L "$WT_DIR/ray/feature-symlink/CLAUDE.local.md" ]
     # Symlink should point to base file
-    [[ "$(readlink "$WT_DIR/feature-symlink/CLAUDE.local.md")" == *"CLAUDE.local.md" ]]
+    [[ "$(readlink "$WT_DIR/ray/feature-symlink/CLAUDE.local.md")" == *"CLAUDE.local.md" ]]
 }
 
 @test "sw add: symlinked file content matches base" {
@@ -1494,7 +1496,7 @@ EOF
 }
 
 @test "sw open: fzf picker shows short paths and opens selected worktree" {
-    sw add feature-open-pick
+    sw add ray/feature-open-pick
     export VISUAL="echo"
 
     # Create a mock fzf that selects the first entry
@@ -1533,17 +1535,17 @@ MOCK
 }
 
 @test "sw open: opens specific worktree from base" {
-    sw add feature-open
+    sw add ray/feature-open
     export VISUAL="echo"
 
-    run sw open feature-open
+    run sw open ray/feature-open
 
     [ "$status" -eq 0 ]
-    [[ "$output" == "$WT_DIR/feature-open" ]]
+    [[ "$output" == "$WT_DIR/ray/feature-open" ]]
 }
 
 @test "sw open: opens base branch from worktree" {
-    sw add -s feature-open-base
+    sw add -s ray/feature-open-base
     # Now in worktree
     export VISUAL="echo"
 
@@ -1554,27 +1556,27 @@ MOCK
 }
 
 @test "sw open: opens another worktree from worktree" {
-    sw add feature-one
-    sw add -s feature-two
-    # Now in feature-two
+    sw add ray/feature-one
+    sw add -s ray/feature-two
+    # Now in ray/feature-two
     export VISUAL="echo"
 
-    run sw open feature-one
+    run sw open ray/feature-one
 
     [ "$status" -eq 0 ]
-    [[ "$output" == "$WT_DIR/feature-one" ]]
+    [[ "$output" == "$WT_DIR/ray/feature-one" ]]
 }
 
 @test "sw open: branch without worktree shows hint" {
     # Create a branch without a worktree
-    git branch feature-no-wt
+    git branch ray/feature-no-wt
 
     export VISUAL="echo"
-    run sw open feature-no-wt
+    run sw open ray/feature-no-wt
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"is a branch but has no worktree"* ]]
-    [[ "$output" == *"sw add feature-no-wt && sw open feature-no-wt"* ]]
+    [[ "$output" == *"sw add ray/feature-no-wt && sw open ray/feature-no-wt"* ]]
 }
 
 @test "sw open: nonexistent branch fails" {
@@ -1591,4 +1593,99 @@ MOCK
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"Unknown option"* ]]
+}
+
+# ============================================================================
+# Slashed branch names: new behavior tests
+# ============================================================================
+
+@test "sw add: creates worktrees with different prefixes sharing leaf name" {
+    run sw add ray/feature-x
+    [ "$status" -eq 0 ]
+
+    run sw add joe/feature-x
+    [ "$status" -eq 0 ]
+
+    # Both should exist as independent worktrees
+    [ -d "$WT_DIR/ray/feature-x" ]
+    [ -d "$WT_DIR/joe/feature-x" ]
+}
+
+@test "sw rm: cleans up empty prefix directory after last worktree removed" {
+    sw add ray/cleanup-one
+    sw add ray/cleanup-two
+
+    sw rm ray/cleanup-one
+    # ray/ directory should still exist (cleanup-two remains)
+    [ -d "$WT_DIR/ray" ]
+
+    sw rm ray/cleanup-two
+    # ray/ directory should be gone (no more worktrees under it)
+    [ ! -d "$WT_DIR/ray" ]
+}
+
+@test "sw done: cleans up empty prefix directory" {
+    sw add -s ray/done-cleanup
+    [[ "$PWD" == *"-worktrees/ray/done-cleanup" ]]
+
+    sw done
+
+    # Should be back in base
+    [[ "$PWD" == "$TEST_DIR" ]]
+    # Worktree gone
+    [ ! -d "$WT_DIR/ray/done-cleanup" ]
+    # Prefix directory should be cleaned up
+    [ ! -d "$WT_DIR/ray" ]
+}
+
+@test "sw cd: fzf display distinguishes branches with same leaf name" {
+    sw add ray/refactor
+    sw add joe/refactor
+
+    # Capture the _sw_fzf_pick transform output (without fzf, just the pipe formatting)
+    local pick_output
+    pick_output=$(git worktree list | while IFS= read -r line; do
+        local wt_path="${line%% *}"
+        local rest="${line#* }"
+        local short="../$(basename "$wt_path")"
+        printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
+    done)
+
+    # Extract just the short path portion (first word after |) from each line
+    # BUG: basename makes both show as "../refactor" — after fix, should show "../ray/refactor" and "../joe/refactor"
+    local short_paths
+    short_paths=$(echo "$pick_output" | cut -d'|' -f2 | awk '{print $1}')
+    [[ "$short_paths" == *"../ray/refactor"* ]]
+    [[ "$short_paths" == *"../joe/refactor"* ]]
+}
+
+@test "sw rm: fzf correctly identifies slashed branch (not just basename)" {
+    sw add ray/feature-fzf-rm
+    sw add joe/feature-fzf-rm
+
+    # Create a mock fzf that selects the first non-base entry (should be joe/ or ray/ depending on sort)
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<'MOCK'
+#!/usr/bin/env bash
+head -1
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    run sw rm
+
+    PATH="$old_path"
+    rm -rf "$mock_dir"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+
+    # Exactly one of the two should be removed, the other should remain
+    local remaining=0
+    [ -d "$WT_DIR/ray/feature-fzf-rm" ] && ((remaining++))
+    [ -d "$WT_DIR/joe/feature-fzf-rm" ] && ((remaining++))
+    [ "$remaining" -eq 1 ]
 }
