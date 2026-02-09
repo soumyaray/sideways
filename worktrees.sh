@@ -549,12 +549,11 @@ _sw_cmd_rebase() {
 }
 
 # sw done: Remove current worktree and return to base
+# Args: $1=repo_root, $2=base_dir, $3=worktrees_dir_abs
 _sw_cmd_done() {
-    local current_path done_base_dir
-    current_path=$(git rev-parse --show-toplevel)
-    done_base_dir=$(_sw_get_base_dir)
+    local repo_root="$1" base_dir="$2" worktrees_dir_abs="$3"
 
-    if _sw_is_in_base "$current_path" "$done_base_dir"; then
+    if _sw_is_in_base "$repo_root" "$base_dir"; then
         _sw_error "not in a worktree (already in base directory)"
         return 1
     fi
@@ -566,19 +565,14 @@ _sw_cmd_done() {
         return 1
     fi
 
-    # Compute worktrees directory for cleanup
-    local done_proj_name done_worktrees_dir
-    done_proj_name=$(basename "$done_base_dir")
-    done_worktrees_dir="$(dirname "$done_base_dir")/${done_proj_name}-worktrees"
-
     # Move to base first, then remove worktree
-    cd "$done_base_dir" || return 1
-    if ! git worktree remove "$current_path"; then
+    cd "$base_dir" || return 1
+    if ! git worktree remove "$repo_root"; then
         return 1
     fi
-    _sw_cleanup_empty_parents "$current_path" "$done_worktrees_dir"
-    echo "Removed worktree: $current_path"
-    echo "Branch preserved. Now in base directory: $done_base_dir"
+    _sw_cleanup_empty_parents "$repo_root" "$worktrees_dir_abs"
+    echo "Removed worktree: $repo_root"
+    echo "Branch preserved. Now in base directory: $base_dir"
 }
 
 # sw open: Open worktree in editor
@@ -719,7 +713,7 @@ sw() {
         base)     _sw_cmd_base "$repo_root" "$base_dir" ;;
         info)     _sw_cmd_info ;;
         rebase)   _sw_cmd_rebase "$@" ;;
-        done)     _sw_cmd_done ;;
+        done)     _sw_cmd_done "$repo_root" "$base_dir" "$worktrees_dir_abs" ;;
         open)     _sw_cmd_open "$base_dir" "$worktrees_dir_abs" "$@" ;;
         help|-h|--help|"")
                   _sw_cmd_help ;;
