@@ -14,6 +14,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="${0:a:h}"
 REPO_DIR="${SCRIPT_DIR:h}"
 TEST_DIR=$(mktemp -d)
+cd "$TEST_DIR" && TEST_DIR=$(pwd -P)  # resolve symlinks (macOS /var -> /private/var)
 PASS=0
 FAIL=0
 
@@ -332,6 +333,7 @@ echo "--- _sw_fzf_pick variable shadowing (zsh-specific) ---"
 # _sw_fzf_pick uses local variables that must not shadow zsh specials (e.g., $path)
 # Feed it fake worktree list lines and use head -1 as a fzf stand-in
 cd "$TEST_DIR/test-repo"
+rm -f .swcopy .swsymlink  # clean up so worktree has no untracked files
 sw add ray/pick-test >/dev/null 2>&1
 
 # Capture git worktree list output, pipe through the transform loop only (no fzf)
@@ -432,7 +434,12 @@ sw add ray/zsh-pick >/dev/null 2>&1
 pick_slash_output=$(git worktree list | while IFS= read -r line; do
     local wt_path="${line%% *}"
     local rest="${line#* }"
-    local short="../$(basename "$wt_path")"
+    local short
+    if [[ "$wt_path" == "$WT_DIR/"* ]]; then
+        short="../${wt_path#$WT_DIR/}"
+    else
+        short="../$(basename "$wt_path")"
+    fi
     printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
 done)
 

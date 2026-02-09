@@ -1647,12 +1647,16 @@ MOCK
     pick_output=$(git worktree list | while IFS= read -r line; do
         local wt_path="${line%% *}"
         local rest="${line#* }"
-        local short="../$(basename "$wt_path")"
+        local short
+        if [[ "$wt_path" == "$WT_DIR/"* ]]; then
+            short="../${wt_path#$WT_DIR/}"
+        else
+            short="../$(basename "$wt_path")"
+        fi
         printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
     done)
 
     # Extract just the short path portion (first word after |) from each line
-    # BUG: basename makes both show as "../refactor" — after fix, should show "../ray/refactor" and "../joe/refactor"
     local short_paths
     short_paths=$(echo "$pick_output" | cut -d'|' -f2 | awk '{print $1}')
     [[ "$short_paths" == *"../ray/refactor"* ]]

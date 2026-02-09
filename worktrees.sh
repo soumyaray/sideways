@@ -55,6 +55,19 @@ _sw_guard_base_dir() {
     fi
 }
 
+# Remove empty parent directories between a removed worktree and the worktrees root
+# Args: $1 = removed worktree path, $2 = worktrees directory (stop boundary)
+_sw_cleanup_empty_parents() {
+    local cleanup_child="$1"
+    local cleanup_stop="$2"
+    local cleanup_dir
+    cleanup_dir="$(dirname "$cleanup_child")"
+    while [[ "$cleanup_dir" != "$cleanup_stop" && "$cleanup_dir" == "$cleanup_stop/"* ]]; do
+        rmdir "$cleanup_dir" 2>/dev/null || break
+        cleanup_dir="$(dirname "$cleanup_dir")"
+    done
+}
+
 # Read patterns from a file, filtering comments and blank lines
 # Output: one pattern per line
 _sw_read_patterns() {
@@ -254,11 +267,18 @@ _sw_no_fzf_error() {
 }
 
 # Format worktree list for fzf with short display paths, output selected full path
+# Args: $1 = worktrees directory (absolute) for prefix stripping
 _sw_fzf_pick() {
+    local pick_wt_dir="$1"
     while IFS= read -r line; do
         local wt_path="${line%% *}"
         local rest="${line#* }"
-        local short="../$(basename "$wt_path")"
+        local short
+        if [[ -n "$pick_wt_dir" && "$wt_path" == "$pick_wt_dir/"* ]]; then
+            short="../${wt_path#$pick_wt_dir/}"
+        else
+            short="../$(basename "$wt_path")"
+        fi
         printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
     done | fzf --delimiter='|' --with-nth=2 | cut -d'|' -f1
 }
@@ -341,7 +361,7 @@ _sw_cmd_cd() {
         cd "$worktrees_dir_abs/$branch"
     elif command -v fzf &>/dev/null; then
         local selected
-        selected=$(git worktree list | _sw_fzf_pick)
+        selected=$(git worktree list | _sw_fzf_pick "$worktrees_dir_abs")
         [[ -n "$selected" ]] && cd "$selected"
     else
         _sw_no_fzf_error "sw cd <branch-name>"
@@ -371,9 +391,9 @@ _sw_cmd_rm() {
     if [[ -z "$branch" ]]; then
         if command -v fzf &>/dev/null; then
             local selected
-            selected=$(git worktree list | awk -v base="$base_dir" '$1 != base' | _sw_fzf_pick)
+            selected=$(git worktree list | awk -v base="$base_dir" '$1 != base' | _sw_fzf_pick "$worktrees_dir_abs")
             [[ -z "$selected" ]] && return 0
-            branch=$(basename "$selected")
+            branch="${selected#$worktrees_dir_abs/}"
         else
             _sw_no_fzf_error "sw rm [-d|-D] <branch-name>"
             return 1
@@ -393,6 +413,7 @@ _sw_cmd_rm() {
     if ! git worktree remove "$wt_path"; then
         return 1
     fi
+    _sw_cleanup_empty_parents "$wt_abs_path" "$worktrees_dir_abs"
     echo "Removed worktree: $wt_path"
 
     if [[ -n "$delete_flag" ]]; then
@@ -530,11 +551,17 @@ _sw_cmd_done() {
         return 1
     fi
 
+    # Compute worktrees directory for cleanup
+    local done_proj_name done_worktrees_dir
+    done_proj_name=$(basename "$done_base_dir")
+    done_worktrees_dir="$(dirname "$done_base_dir")/${done_proj_name}-worktrees"
+
     # Move to base first, then remove worktree
     cd "$done_base_dir" || return 1
     if ! git worktree remove "$current_path"; then
         return 1
     fi
+    _sw_cleanup_empty_parents "$current_path" "$done_worktrees_dir"
     echo "Removed worktree: $current_path"
     echo "Branch preserved. Now in base directory: $done_base_dir"
 }
@@ -563,7 +590,7 @@ _sw_cmd_open() {
     if [[ -z "$target" || "$target" == "." ]]; then
         if command -v fzf &>/dev/null; then
             local selected
-            selected=$(git worktree list | _sw_fzf_pick)
+            selected=$(git worktree list | _sw_fzf_pick "$worktrees_dir_abs")
             [[ -z "$selected" ]] && return 0
             target_dir="$selected"
         else
