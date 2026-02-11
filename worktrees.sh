@@ -270,16 +270,22 @@ _sw_no_fzf_error() {
 # Args: $1 = worktrees directory (absolute) for prefix stripping
 _sw_fzf_pick() {
     local pick_wt_dir="$1"
+    local wt_path rest short max_len=0
+    local -a entries
     while IFS= read -r line; do
-        local wt_path="${line%% *}"
-        local rest="${line#* }"
-        local short
+        wt_path="${line%% *}"
+        rest="${line#* }"
+        rest="${rest#"${rest%%[! ]*}"}"
         if [[ -n "$pick_wt_dir" && "$wt_path" == "$pick_wt_dir/"* ]]; then
             short="../${wt_path#$pick_wt_dir/}"
         else
             short="../$(basename "$wt_path")"
         fi
-        printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
+        entries+=("${wt_path}|${short}|${rest}")
+        (( ${#short} > max_len )) && max_len=${#short}
+    done
+    printf '%s\n' "${entries[@]}" | while IFS='|' read -r wt_path short rest; do
+        printf "%s|%-${max_len}s  %s\n" "$wt_path" "$short" "$rest"
     done | fzf --delimiter='|' --with-nth=2 | cut -d'|' -f1
 }
 

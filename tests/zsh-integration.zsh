@@ -367,6 +367,60 @@ fi
 sw rm ray/pick-test >/dev/null 2>&1
 
 echo ""
+echo "--- _sw_fzf_pick no spurious output (bare local in loop regression) ---"
+
+# In zsh, bare `local var` (no =value) inside a loop prints the variable's
+# value on iteration 2+.  This caused blank lines in fzf.  The fix is to
+# declare loop vars BEFORE the loop.  This test creates multiple worktrees
+# so the loop iterates several times, then checks for spurious output.
+cd "$TEST_DIR/test-repo"
+rm -f .swcopy .swsymlink
+sw add ray/multi-1 >/dev/null 2>&1
+sw add ray/multi-2 >/dev/null 2>&1
+sw add ray/multi-3 >/dev/null 2>&1
+
+# Count expected output lines (one per worktree entry from git worktree list)
+expected_lines=$(git worktree list | wc -l | tr -d ' ')
+
+# Simulate _sw_fzf_pick's transform loop (mirrors worktrees.sh logic)
+local pick_wt_dir="$TEST_DIR/test-repo-worktrees"
+local wt_path rest short max_len=0
+local -a entries=()
+pick_output=$(git worktree list | while IFS= read -r line; do
+    wt_path="${line%% *}"
+    rest="${line#* }"
+    rest="${rest#"${rest%%[! ]*}"}"
+    if [[ -n "$pick_wt_dir" && "$wt_path" == "$pick_wt_dir/"* ]]; then
+        short="../${wt_path#$pick_wt_dir/}"
+    else
+        short="../$(basename "$wt_path")"
+    fi
+    printf '%s|%s %s\n' "$wt_path" "$short" "$rest"
+done)
+
+actual_lines=$(echo "$pick_output" | wc -l | tr -d ' ')
+if [[ "$actual_lines" -eq "$expected_lines" ]]; then
+    assert "_sw_fzf_pick output has no spurious lines ($actual_lines == $expected_lines)" true
+else
+    echo "  Expected $expected_lines lines, got $actual_lines"
+    echo "  Output: $pick_output"
+    assert "_sw_fzf_pick output has no spurious lines ($actual_lines != $expected_lines)" false
+fi
+
+# Also check no blank lines in output (the visible symptom of the bug)
+blank_lines=$(echo "$pick_output" | grep -c '^$' || true)
+if [[ "$blank_lines" -eq 0 ]]; then
+    assert "_sw_fzf_pick output has no blank lines" true
+else
+    echo "  Found $blank_lines blank lines in output"
+    assert "_sw_fzf_pick output has no blank lines" false
+fi
+
+sw rm ray/multi-1 >/dev/null 2>&1
+sw rm ray/multi-2 >/dev/null 2>&1
+sw rm ray/multi-3 >/dev/null 2>&1
+
+echo ""
 echo "--- .swsymlink Nested Patterns (zsh-specific) ---"
 
 # -- Nested directory symlink --
