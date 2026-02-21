@@ -32,7 +32,7 @@ Resulting directory structure:
 ### Why this over [other worktree tools](https://github.com/topics/git-worktree)?
 
 - **Zero dependencies** — pure shell (~650 lines, single file), works with bash and zsh; optional fzf for interactive selection
-- **Workflow commands** — `sw rebase <branch>` (sync with any branch), `sw done` (cleanup and return to base)
+- **Workflow commands** — `sw rebase <branch>` (sync with any branch, auto-push if tracked), `sw done` (cleanup and return to base)
 - **Editor integration** — `sw open` launches your editor directly in a worktree
 - **Gitignored file handling** — `.swcopy`/`.swsymlink` to copy or symlink env files and local configs to new worktrees
 - **Safety guards** — blocks `rm`/`done` if uncommitted changes exist, blocks `add`/`rm` from wrong directory
@@ -100,7 +100,7 @@ sw <command> [options]
 | -------------------- | ----------------------------------------- |
 | `sw base`            | Jump back to base                         |
 |                      |                                           |
-| `sw rebase <branch>` | Fetch and rebase onto origin/\<branch\>   |
+| `sw rebase <branch>` | Fetch, rebase onto origin/\<branch\>, push if tracked |
 | `sw done`            | Remove worktree (keep branch), cd to base |
 
 **Anywhere:**
@@ -130,7 +130,7 @@ sw rm -D feature-login     # Remove worktree and force delete branch
 
 # From worktree: navigate and sync
 sw info                    # See where you are
-sw rebase main             # Fetch and rebase onto origin/main
+sw rebase main             # Fetch, rebase onto origin/main, push if tracked
 sw base                    # Jump back to base
 sw done                    # Remove worktree (keep branch), cd to base
 ```

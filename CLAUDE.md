@@ -28,7 +28,7 @@ A shell function (`sw`) for managing git worktrees. See `sw --help` or `README.m
 
 ## Testing
 
-**Unit tests** (106 tests using bats-core):
+**Unit tests** (109 tests using bats-core):
 
 ```bash
 brew install bats-core parallel  # if needed

@@ -531,6 +531,51 @@ if [[ -d "$WT_DIR/ray" ]]; then
 fi
 assert "empty prefix dir cleaned up after rm" $slash_cleanup_ok
 
+# ==========================================================================
+# Rebase + auto-push (zsh-specific)
+# ==========================================================================
+
+echo ""
+echo "--- Rebase Auto-Push (zsh-specific) ---"
+
+cd "$TEST_DIR/test-repo"
+
+# Create a bare remote and configure it
+local REMOTE_DIR
+REMOTE_DIR=$(mktemp -d)
+cd "$REMOTE_DIR" && REMOTE_DIR=$(pwd -P)
+git init -q --bare --initial-branch=main
+cd "$TEST_DIR/test-repo"
+git remote add origin "$REMOTE_DIR"
+git push -q -u origin main
+
+# Create a worktree with a tracking branch
+sw add -s ray/rebase-push >/dev/null 2>&1
+git push -q -u origin ray/rebase-push
+
+# Add a commit so there's something to push
+echo "zsh rebase work" > zsh-work.txt
+git add zsh-work.txt
+git commit -q -m "Zsh rebase work"
+
+output=$(sw rebase main 2>&1)
+rebase_push_ok=true
+if [[ "$output" == *"command not found"* ]]; then
+    rebase_push_ok=false
+    echo "  ERROR: 'command not found' in rebase+push"
+fi
+if [[ "$output" != *"Pushing to origin"* ]]; then
+    rebase_push_ok=false
+    echo "  Missing 'Pushing to origin' in output"
+fi
+assert "rebase+push works without command-not-found errors" $rebase_push_ok
+
+# Clean up
+cd "$TEST_DIR/test-repo"
+sw rm ray/rebase-push >/dev/null 2>&1
+git remote remove origin
+rm -rf "$REMOTE_DIR"
+
 # Summary
 echo ""
 echo "=== Results ==="

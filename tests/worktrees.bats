@@ -41,6 +41,21 @@ teardown() {
         rm -rf "$TEST_DIR"
         rm -rf "$WT_DIR"
     fi
+
+    # Clean up remote bare repo if created
+    if [[ -n "$REMOTE_DIR" && -d "$REMOTE_DIR" ]]; then
+        rm -rf "$REMOTE_DIR"
+    fi
+}
+
+# Helper: create a bare repo as mock origin and configure it as remote
+setup_mock_remote() {
+    REMOTE_DIR=$(mktemp -d)
+    cd "$REMOTE_DIR" && REMOTE_DIR=$(pwd -P)
+    git init --bare --initial-branch=main
+    cd "$TEST_DIR"
+    git remote add origin "$REMOTE_DIR"
+    git push -u origin main
 }
 
 # ============================================================================
@@ -618,6 +633,70 @@ MOCK
     run sw rebase main
 
     [ "$status" -ne 0 ]
+}
+
+@test "sw rebase: pushes after successful rebase when branch has upstream" {
+    setup_mock_remote
+
+    # Create a worktree with a tracking branch
+    sw add -s ray/feature-push
+    git push -u origin ray/feature-push
+
+    # Add a commit so there's something to push after rebase
+    echo "new work" > work.txt
+    git add work.txt
+    git commit -m "Work on feature"
+
+    run sw rebase main
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Pushing to origin"* ]]
+
+    # Verify the commit was actually pushed to the remote
+    local remote_log
+    remote_log=$(git -C "$REMOTE_DIR" log --oneline ray/feature-push 2>/dev/null)
+    [[ "$remote_log" == *"Work on feature"* ]]
+}
+
+@test "sw rebase: skips push when branch has no upstream" {
+    setup_mock_remote
+
+    # Create a worktree but do NOT push (no upstream tracking)
+    sw add -s ray/feature-no-upstream
+
+    run sw rebase main
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Pushing to origin"* ]]
+}
+
+@test "sw rebase: does not push when rebase fails (conflict)" {
+    setup_mock_remote
+
+    # Create a worktree with a tracking branch
+    sw add -s ray/feature-conflict
+    git push -u origin ray/feature-conflict
+
+    # Create a conflicting commit on main (via base)
+    cd "$TEST_DIR"
+    echo "main version" > conflict.txt
+    git add conflict.txt
+    git commit -m "Main conflict"
+    git push origin main
+
+    # Go back to worktree and create conflicting change
+    sw cd ray/feature-conflict
+    echo "feature version" > conflict.txt
+    git add conflict.txt
+    git commit -m "Feature conflict"
+
+    run sw rebase main
+
+    [ "$status" -ne 0 ]
+    [[ "$output" != *"Pushing to origin"* ]]
+
+    # Abort the rebase to clean up
+    git rebase --abort 2>/dev/null || true
 }
 
 # ============================================================================

@@ -29,6 +29,11 @@ _sw_is_in_base() {
     [[ "$1" == "$2" ]]
 }
 
+# Check if current branch tracks a remote
+_sw_has_upstream() {
+    git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1
+}
+
 # Choose editor based on flag, then $VISUAL, then $EDITOR
 # Args: $1 = editor from flag (optional)
 # Returns: editor command or empty string
@@ -536,7 +541,7 @@ _sw_cmd_info() {
     echo "Location: $location"
 }
 
-# sw rebase: Fetch and rebase onto a branch
+# sw rebase: Fetch, rebase onto a branch, push if tracked
 # Args: $1+=command args
 _sw_cmd_rebase() {
     local target_branch="$1"
@@ -551,7 +556,14 @@ _sw_cmd_rebase() {
         return 1
     fi
     echo "Rebasing onto origin/$target_branch..."
-    git rebase "origin/$target_branch"
+    if ! git rebase "origin/$target_branch"; then
+        return 1
+    fi
+
+    if _sw_has_upstream; then
+        echo "Pushing to origin..."
+        git push --force-with-lease
+    fi
 }
 
 # sw done: Remove current worktree and return to base
@@ -666,7 +678,7 @@ From base directory only:
 
 From worktree subdirectory only:
   base                         Jump back to base
-  rebase <branch>              Fetch and rebase onto origin/<branch>
+  rebase <branch>              Fetch, rebase onto origin/<branch>, push if tracked
   done                         Remove worktree (keep branch), cd to base
 
 Anywhere:
