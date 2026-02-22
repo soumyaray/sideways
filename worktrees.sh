@@ -73,6 +73,50 @@ _sw_cleanup_empty_parents() {
     done
 }
 
+# Find the actual worktree path for a branch name (handles renames)
+# Args: $1 = branch name
+# Output: worktree path on stdout, returns 1 if not found
+_sw_find_worktree_by_branch() {
+    local target_branch="$1"
+    local wt_path="" wt_branch=""
+    while IFS= read -r line; do
+        case "$line" in
+            worktree\ *) wt_path="${line#worktree }" ;;
+            branch\ *)   wt_branch="${line#branch refs/heads/}" ;;
+            "")
+                if [[ "$wt_branch" == "$target_branch" && -n "$wt_path" ]]; then
+                    echo "$wt_path"
+                    return 0
+                fi
+                wt_path="" wt_branch=""
+                ;;
+        esac
+    done < <(git worktree list --porcelain; echo)
+    return 1
+}
+
+# Find the branch name for a worktree path (reverse of _sw_find_worktree_by_branch)
+# Args: $1 = worktree absolute path
+# Output: branch name on stdout, returns 1 if not found
+_sw_find_branch_by_worktree() {
+    local target_path="$1"
+    local wt_path="" wt_branch=""
+    while IFS= read -r line; do
+        case "$line" in
+            worktree\ *) wt_path="${line#worktree }" ;;
+            branch\ *)   wt_branch="${line#branch refs/heads/}" ;;
+            "")
+                if [[ "$wt_path" == "$target_path" && -n "$wt_branch" ]]; then
+                    echo "$wt_branch"
+                    return 0
+                fi
+                wt_path="" wt_branch=""
+                ;;
+        esac
+    done < <(git worktree list --porcelain; echo)
+    return 1
+}
+
 # Read patterns from a file, filtering comments and blank lines
 # Output: one pattern per line
 _sw_read_patterns() {
@@ -369,7 +413,15 @@ _sw_cmd_cd() {
 
     local branch="$1"
     if [[ -n "$branch" ]]; then
-        cd "$worktrees_dir_abs/$branch"
+        local target_dir="$worktrees_dir_abs/$branch"
+        if [[ ! -d "$target_dir" ]]; then
+            local resolved_wt
+            resolved_wt=$(_sw_find_worktree_by_branch "$branch")
+            if [[ -n "$resolved_wt" && -d "$resolved_wt" ]]; then
+                target_dir="$resolved_wt"
+            fi
+        fi
+        cd "$target_dir"
     elif command -v fzf &>/dev/null; then
         local selected
         selected=$(git worktree list | _sw_fzf_pick "$worktrees_dir_abs")
@@ -414,6 +466,16 @@ _sw_cmd_rm() {
     local wt_path="$worktrees_dir_rel/$branch"
     local wt_abs_path="$worktrees_dir_abs/$branch"
 
+    # Fallback: branch may have been renamed after worktree creation
+    if [[ ! -d "$wt_abs_path" ]]; then
+        local resolved_wt
+        resolved_wt=$(_sw_find_worktree_by_branch "$branch")
+        if [[ -n "$resolved_wt" && -d "$resolved_wt" ]]; then
+            wt_abs_path="$resolved_wt"
+            wt_path="$resolved_wt"
+        fi
+    fi
+
     # Handle stale worktree (directory already removed but git metadata remains)
     if [[ ! -d "$wt_abs_path" ]]; then
         echo "Worktree directory already removed, cleaning up stale reference..."
@@ -436,6 +498,10 @@ _sw_cmd_rm() {
         return 1
     fi
 
+    # Resolve actual branch name before removal (directory name may differ after rename)
+    local actual_branch
+    actual_branch=$(_sw_find_branch_by_worktree "$wt_abs_path") || actual_branch="$branch"
+
     if ! git worktree remove "$wt_path"; then
         return 1
     fi
@@ -443,10 +509,10 @@ _sw_cmd_rm() {
     echo "Removed worktree: $wt_path"
 
     if [[ -n "$delete_flag" ]]; then
-        if git branch "$delete_flag" "$branch" >/dev/null 2>&1; then
-            echo "Deleted branch: $branch"
+        if git branch "$delete_flag" "$actual_branch" >/dev/null 2>&1; then
+            echo "Deleted branch: $actual_branch"
         else
-            echo "Branch $branch not fully merged. Use -D to force delete." >&2
+            echo "Branch $actual_branch not fully merged. Use -D to force delete." >&2
         fi
     fi
 }
@@ -633,14 +699,21 @@ _sw_cmd_open() {
         elif [[ -d "$worktrees_dir_abs/$target" ]]; then
             # Worktree exists
             target_dir="$worktrees_dir_abs/$target"
-        elif git show-ref --verify --quiet "refs/heads/$target"; then
-            # Branch exists but no worktree
-            _sw_error "'$target' is a branch but has no worktree"
-            echo "Hint: sw add $target && sw open $target" >&2
-            return 1
         else
-            _sw_error "worktree '$target' not found"
-            return 1
+            # Fallback: branch may have been renamed after worktree creation
+            local resolved_wt
+            resolved_wt=$(_sw_find_worktree_by_branch "$target")
+            if [[ -n "$resolved_wt" && -d "$resolved_wt" ]]; then
+                target_dir="$resolved_wt"
+            elif git show-ref --verify --quiet "refs/heads/$target"; then
+                # Branch exists but no worktree
+                _sw_error "'$target' is a branch but has no worktree"
+                echo "Hint: sw add $target && sw open $target" >&2
+                return 1
+            else
+                _sw_error "worktree '$target' not found"
+                return 1
+            fi
         fi
     fi
 
@@ -655,6 +728,69 @@ _sw_cmd_open() {
 
     # Open directory
     "$editor" "$target_dir"
+}
+
+# sw mv: Rename branch and move worktree directory
+# Args: $1=repo_root, $2=base_dir, $3=worktrees_dir_rel, $4=worktrees_dir_abs, $5+=command args
+_sw_cmd_mv() {
+    local repo_root="$1" base_dir="$2" worktrees_dir_rel="$3" worktrees_dir_abs="$4"
+    shift 4
+
+    # Guard: must be in base directory
+    _sw_guard_base_dir "$repo_root" "$base_dir" "mv" "$@" || return 1
+
+    local old_branch="$1"
+    local new_branch="$2"
+    if [[ -z "$old_branch" || -z "$new_branch" ]]; then
+        _sw_error "Usage: sw mv <old-branch> <new-branch>"
+        return 1
+    fi
+
+    # Resolve old worktree path (supports previously renamed branches)
+    local old_wt_abs="$worktrees_dir_abs/$old_branch"
+    if [[ ! -d "$old_wt_abs" ]]; then
+        local resolved_wt
+        resolved_wt=$(_sw_find_worktree_by_branch "$old_branch")
+        if [[ -n "$resolved_wt" && -d "$resolved_wt" ]]; then
+            old_wt_abs="$resolved_wt"
+        else
+            _sw_error "worktree '$old_branch' not found"
+            return 1
+        fi
+    fi
+
+    # Guard: check for uncommitted changes
+    if _sw_has_uncommitted_changes "$old_wt_abs"; then
+        _sw_error "worktree '$old_branch' has uncommitted changes"
+        echo "Commit or stash changes before renaming" >&2
+        return 1
+    fi
+
+    # Guard: new branch must not already exist
+    if git show-ref --verify --quiet "refs/heads/$new_branch"; then
+        _sw_error "branch '$new_branch' already exists"
+        return 1
+    fi
+
+    # Rename the branch
+    if ! git branch -m "$old_branch" "$new_branch"; then
+        return 1
+    fi
+
+    # Move the worktree directory
+    local new_wt_abs="$worktrees_dir_abs/$new_branch"
+    mkdir -p "$(dirname "$new_wt_abs")"
+    if ! git worktree move "$old_wt_abs" "$new_wt_abs"; then
+        # Rollback branch rename on failure
+        git branch -m "$new_branch" "$old_branch"
+        return 1
+    fi
+
+    # Clean up empty parent directories from old path
+    _sw_cleanup_empty_parents "$old_wt_abs" "$worktrees_dir_abs"
+
+    echo "Renamed: $old_branch -> $new_branch"
+    echo "Moved:   $old_wt_abs -> $new_wt_abs"
 }
 
 # sw help: Show help message
@@ -674,6 +810,7 @@ From base directory only:
                                -d: also delete branch (if merged)
                                -D: also delete branch (force)
                                No branch: interactive selection via fzf
+  mv <old> <new>               Rename branch and move worktree directory
   prune                        Remove stale worktree references
 
 From worktree subdirectory only:
@@ -726,6 +863,7 @@ sw() {
         add)      _sw_cmd_add "$repo_root" "$base_dir" "$worktrees_dir_rel" "$worktrees_dir_abs" "$@" ;;
         cd)       _sw_cmd_cd "$worktrees_dir_abs" "$@" ;;
         rm)       _sw_cmd_rm "$repo_root" "$base_dir" "$worktrees_dir_rel" "$worktrees_dir_abs" "$@" ;;
+        mv)       _sw_cmd_mv "$repo_root" "$base_dir" "$worktrees_dir_rel" "$worktrees_dir_abs" "$@" ;;
         list|ls)  _sw_cmd_list "$repo_root" "$base_dir" ;;
         prune)    _sw_cmd_prune ;;
         base)     _sw_cmd_base "$repo_root" "$base_dir" ;;

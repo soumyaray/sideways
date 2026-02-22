@@ -1844,3 +1844,228 @@ MOCK
     run git branch --list ray/stale-no-delete
     [[ "$output" == *"ray/stale-no-delete"* ]]
 }
+
+# ============================================================================
+# Branch rename: worktree path resolution after git branch -m
+# ============================================================================
+
+@test "sw rm: finds worktree after branch rename" {
+    sw add old-name
+
+    # Rename the branch — worktree folder stays as old-name/
+    git branch -m old-name new-name
+
+    run sw rm new-name
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+
+    # Worktree directory should be gone
+    [ ! -d "$WT_DIR/old-name" ]
+}
+
+@test "sw rm -d: deletes renamed branch after removal" {
+    sw add old-rmd
+
+    git branch -m old-rmd new-rmd
+
+    run sw rm -d new-rmd
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+    [[ "$output" == *"Deleted branch:"* ]]
+
+    # Worktree directory should be gone
+    [ ! -d "$WT_DIR/old-rmd" ]
+
+    # Branch should be gone
+    run git branch --list new-rmd
+    [ -z "$output" ]
+}
+
+@test "sw rm -d: fzf deletes correct branch after rename" {
+    sw add old-fzf-rmd
+
+    git branch -m old-fzf-rmd new-fzf-rmd
+
+    # Mock fzf to select the first (only non-base) entry
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<'MOCK'
+#!/usr/bin/env bash
+head -1
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    run sw rm -d
+
+    PATH="$old_path"
+    rm -rf "$mock_dir"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed worktree:"* ]]
+    [[ "$output" == *"Deleted branch:"* ]]
+
+    # Worktree directory should be gone
+    [ ! -d "$WT_DIR/old-fzf-rmd" ]
+
+    # The renamed branch should be deleted (not the old name)
+    run git branch --list new-fzf-rmd
+    [ -z "$output" ]
+}
+
+@test "sw cd: finds worktree after branch rename" {
+    sw add old-cd
+
+    git branch -m old-cd new-cd
+
+    sw cd new-cd
+
+    # Should be in the worktree (still at old path)
+    [[ "$PWD" == "$WT_DIR/old-cd" ]]
+
+    # Should be on the renamed branch
+    run git branch --show-current
+    [ "$output" = "new-cd" ]
+}
+
+@test "sw open: finds worktree after branch rename" {
+    sw add old-open
+
+    git branch -m old-open new-open
+
+    export VISUAL="echo"
+    run sw open new-open
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$WT_DIR/old-open" ]]
+}
+
+# ============================================================================
+# sw mv: rename branch and move worktree directory
+# ============================================================================
+
+@test "sw mv: renames branch and moves worktree directory" {
+    sw add feature-old
+
+    run sw mv feature-old feature-new
+
+    [ "$status" -eq 0 ]
+
+    # Old directory should be gone, new should exist
+    [ ! -d "$WT_DIR/feature-old" ]
+    [ -d "$WT_DIR/feature-new" ]
+
+    # Old branch should be gone, new should exist
+    run git branch --list feature-old
+    [ -z "$output" ]
+    run git branch --list feature-new
+    [[ "$output" == *"feature-new"* ]]
+}
+
+@test "sw mv: fails without arguments" {
+    run sw mv
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Usage:"* ]]
+}
+
+@test "sw mv: fails with only one argument" {
+    run sw mv feature-old
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Usage:"* ]]
+}
+
+@test "sw mv: fails from inside a worktree" {
+    sw add -s feature-inside
+
+    run sw mv feature-inside feature-renamed
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"must be run from base directory"* ]]
+}
+
+@test "sw mv: fails with uncommitted changes" {
+    sw add feature-dirty-mv
+    echo "dirty" >> "$WT_DIR/feature-dirty-mv/README.md"
+
+    run sw mv feature-dirty-mv feature-clean
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"uncommitted changes"* ]]
+
+    # Nothing should have changed
+    [ -d "$WT_DIR/feature-dirty-mv" ]
+    [ ! -d "$WT_DIR/feature-clean" ]
+}
+
+@test "sw mv: fails if old branch has no worktree" {
+    git branch no-worktree
+
+    run sw mv no-worktree renamed
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"not found"* ]]
+}
+
+@test "sw mv: fails if new branch name already exists" {
+    sw add feature-src
+    git branch feature-taken
+
+    run sw mv feature-src feature-taken
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"already exists"* ]]
+
+    # Nothing should have changed
+    [ -d "$WT_DIR/feature-src" ]
+}
+
+@test "sw mv: cleans up empty parent directory after move" {
+    sw add ray/feature-move
+
+    run sw mv ray/feature-move new-flat
+
+    [ "$status" -eq 0 ]
+    [ ! -d "$WT_DIR/ray/feature-move" ]
+    [ ! -d "$WT_DIR/ray" ]
+    [ -d "$WT_DIR/new-flat" ]
+}
+
+@test "sw mv: creates parent directory for slashed new name" {
+    sw add feature-flat
+
+    run sw mv feature-flat joe/feature-slashed
+
+    [ "$status" -eq 0 ]
+    [ ! -d "$WT_DIR/feature-flat" ]
+    [ -d "$WT_DIR/joe/feature-slashed" ]
+}
+
+@test "sw mv: cd works with new name after mv" {
+    sw add feature-cd-mv
+
+    sw mv feature-cd-mv feature-cd-renamed
+
+    sw cd feature-cd-renamed
+
+    [[ "$PWD" == "$WT_DIR/feature-cd-renamed" ]]
+    run git branch --show-current
+    [ "$output" = "feature-cd-renamed" ]
+}
+
+@test "sw mv: open works with new name after mv" {
+    sw add feature-open-mv
+
+    sw mv feature-open-mv feature-open-renamed
+
+    export VISUAL="echo"
+    run sw open feature-open-renamed
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == "$WT_DIR/feature-open-renamed" ]]
+}
