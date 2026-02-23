@@ -76,11 +76,110 @@ setup_mock_remote() {
     [[ "$output" == *"ray/feature-test"* ]]
 }
 
-@test "sw add: fails without branch name" {
+@test "sw add: without fzf and no branch shows install message" {
+    local old_path="$PATH"
+    PATH="/usr/bin:/bin"
+
     run sw add
 
+    PATH="$old_path"
+
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Usage: sw add"* ]]
+    [[ "$output" == *"Interactive mode requires fzf"* ]]
+    [[ "$output" == *"sw add [-s|--switch] [-o|--open] <branch-name>"* ]]
+}
+
+@test "sw add: fzf picker shows existing branches and creates worktree" {
+    # Create branches without worktrees
+    git branch feature-pick-one
+    git branch feature-pick-two
+
+    # Create a mock fzf that selects feature-pick-one
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<'MOCK'
+#!/usr/bin/env bash
+# Select the first branch from input
+head -1
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    run sw add
+
+    PATH="$old_path"
+    rm -rf "$mock_dir"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"(existing branch feature-pick-one)"* ]]
+    [ -d "$WT_DIR/feature-pick-one" ]
+}
+
+@test "sw add: fzf picker excludes branches already in worktrees" {
+    # Create a branch and add it as a worktree
+    git branch feature-in-wt
+    sw add feature-in-wt
+
+    # Create another branch without a worktree
+    git branch feature-available
+
+    # Create a mock fzf that captures its input and selects the first entry
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<MOCK
+#!/usr/bin/env bash
+# Save input for inspection, then select first entry
+cat > "$mock_dir/fzf_input.txt"
+head -1 < "$mock_dir/fzf_input.txt"
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    run sw add
+
+    PATH="$old_path"
+
+    # Verify branches already in worktrees (main, feature-in-wt) are excluded from fzf input
+    local fzf_input
+    fzf_input=$(cat "$mock_dir/fzf_input.txt")
+    rm -rf "$mock_dir"
+
+    [[ "$fzf_input" != *"main"* ]]
+    [[ "$fzf_input" != *"feature-in-wt"* ]]
+    [[ "$fzf_input" == *"feature-available"* ]]
+}
+
+@test "sw add -o: fzf picker works with open flag" {
+    # Create a branch without a worktree
+    git branch feature-fzf-open
+
+    export VISUAL="echo"
+
+    # Create a mock fzf that selects the first entry
+    local mock_dir
+    mock_dir=$(mktemp -d)
+    cat > "$mock_dir/fzf" <<'MOCK'
+#!/usr/bin/env bash
+head -1
+MOCK
+    chmod +x "$mock_dir/fzf"
+
+    local old_path="$PATH"
+    PATH="$mock_dir:$PATH"
+
+    run sw add -o
+
+    PATH="$old_path"
+    rm -rf "$mock_dir"
+
+    [ "$status" -eq 0 ]
+    [ -d "$WT_DIR/feature-fzf-open" ]
+    # Editor (echo) should output the worktree path
+    [[ "$output" == *"$WT_DIR/feature-fzf-open"* ]]
 }
 
 @test "sw add -s: creates worktree and switches to it" {

@@ -338,6 +338,27 @@ _sw_fzf_pick() {
     done | fzf --delimiter='|' --with-nth=2 | cut -d'|' -f1
 }
 
+# Select a branch via fzf from local branches not already in a worktree
+_sw_fzf_pick_branch() {
+    local wt_branches="" pick_branch=""
+    while IFS= read -r line; do
+        case "$line" in
+            branch\ *) pick_branch="${line#branch refs/heads/}" ;;
+            "")
+                [[ -n "$pick_branch" ]] && wt_branches="$wt_branches|$pick_branch|"
+                pick_branch=""
+                ;;
+        esac
+    done < <(git worktree list --porcelain; echo)
+
+    while IFS= read -r pick_branch; do
+        case "$wt_branches" in
+            *"|$pick_branch|"*) continue ;;
+        esac
+        echo "$pick_branch"
+    done < <(git branch --format='%(refname:short)') | fzf
+}
+
 # =============================================================================
 # CONTROLLER LAYER - Command handlers
 # =============================================================================
@@ -364,8 +385,13 @@ _sw_cmd_add() {
 
     local branch="$1"
     if [[ -z "$branch" ]]; then
-        _sw_error "Usage: sw add [-s|--switch] <branch-name>"
-        return 1
+        if command -v fzf &>/dev/null; then
+            branch=$(_sw_fzf_pick_branch)
+            [[ -z "$branch" ]] && return 0
+        else
+            _sw_no_fzf_error "sw add [-s|--switch] [-o|--open] <branch-name>"
+            return 1
+        fi
     fi
 
     local wt_path="$worktrees_dir_rel/$branch"
