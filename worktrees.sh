@@ -121,7 +121,7 @@ _sw_find_branch_by_worktree() {
 # Output: one pattern per line
 _sw_read_patterns() {
     local file="$1"
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
         [[ -z "${line// }" ]] && continue
         printf '%s\n' "$line"

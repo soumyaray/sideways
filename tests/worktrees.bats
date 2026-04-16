@@ -1590,6 +1590,64 @@ EOF
 }
 
 # ============================================================================
+# sw add: trailing newline handling in .swcopy/.swsymlink
+# ============================================================================
+
+@test "sw add: .swcopy without trailing newline still copies file" {
+    echo ".env" >> .gitignore
+    echo "SECRET=abc123" > .env
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Write .swcopy WITHOUT trailing newline
+    printf '.env' > .swcopy
+
+    run sw add feature-no-newline-copy
+
+    [ "$status" -eq 0 ]
+    [ -f "$WT_DIR/feature-no-newline-copy/.env" ]
+    [[ "$(cat "$WT_DIR/feature-no-newline-copy/.env")" == "SECRET=abc123" ]]
+}
+
+@test "sw add: .swsymlink without trailing newline still symlinks directory" {
+    cat > .gitignore <<'EOF'
+config/
+EOF
+    mkdir -p config
+    echo "key: value" > config/settings.yml
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Write .swsymlink WITHOUT trailing newline
+    printf 'config/' > .swsymlink
+
+    run sw add feature-no-newline-link
+
+    [ "$status" -eq 0 ]
+    [ -L "$WT_DIR/feature-no-newline-link/config" ]
+}
+
+@test "sw add: .swcopy with multiple lines and no trailing newline copies all" {
+    cat > .gitignore <<'EOF'
+.env
+.envrc
+EOF
+    echo "SECRET=abc" > .env
+    echo "layout ruby" > .envrc
+    git add .gitignore
+    git commit -m "Add gitignore"
+
+    # Write .swcopy with multiple lines, NO trailing newline on last line
+    printf '.env\n.envrc' > .swcopy
+
+    run sw add feature-multi-no-newline
+
+    [ "$status" -eq 0 ]
+    [ -f "$WT_DIR/feature-multi-no-newline/.env" ]
+    [ -f "$WT_DIR/feature-multi-no-newline/.envrc" ]
+}
+
+# ============================================================================
 # sw open
 # ============================================================================
 
